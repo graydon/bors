@@ -39,7 +39,7 @@
 #	"reviewers": ["brson", "catamorphism", "graydon", "nikomatsakis", "pcwalton"],
 #	"builders": ["auto-linux", "auto-win", "auto-bsd", "auto-mac"],
 #	"test_ref": "auto",
-#	"master_ref": "master",
+#	"master_ref": "incoming",
 #	"nbuilds": 5,
 #	"buildbot": "http://buildbot.rust-lang.org",
 #	"gh_user": "bors",
