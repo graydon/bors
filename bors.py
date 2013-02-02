@@ -381,6 +381,13 @@ class PullReq:
             self.merge_pull_head_to_test_ref()
 
         elif s == STATE_PENDING:
+            if self.merge_sha == None:
+                c = ("No active merge of candidate %.8s found, likely manual push to %s"
+                     % (self.sha, self.master_ref))
+                self.log.info(c)
+                self.add_comment(self.sha, c)
+                self.set_error(c)
+                return
             self.log.info("%s - found pending state, checking tests", self.short())
             assert self.merge_sha != None
             bb = BuildBot(self.cfg)
