@@ -36,7 +36,7 @@
 # {
 #	"owner": "mozilla",
 #	"repo": "rust",
-#	"reviewers": ["brson", "catamorphism", "graydon", "nmatsakis", "pcwalton"],
+#	"reviewers": ["brson", "catamorphism", "graydon", "nikomatsakis", "pcwalton"],
 #	"builders": ["auto-linux", "auto-win", "auto-bsd", "auto-mac"],
 #	"test_ref": "auto",
 #	"master_ref": "master",
