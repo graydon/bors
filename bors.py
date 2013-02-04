@@ -250,8 +250,8 @@ class PullReq:
     def set_success(self, txt):
         self.set_status("success", description=txt)
 
-    def set_failure(self):
-        self.set_status("failure")
+    def set_failure(self, txt):
+        self.set_status("failure", description=txt)
 
     def set_error(self, txt):
         self.set_status("error", description=txt)
