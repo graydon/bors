@@ -192,8 +192,9 @@ class PullReq:
                 (self.src_owner, self.src_repo, self.ref, self.sha))
 
     def desc(self):
-        return ("pull #%d - %s - '%.10s'" %
-                (self.num, self.short(), self.title))
+        return ("pull https://github.com/%s/%s/pull/%d - %s - '%.30s'" %
+                (self.dst_owner, self.dst_repo,
+                 self.num, self.short(), self.title))
 
     def src(self):
         return self.gh.repos(self.src_owner)(self.src_repo)
