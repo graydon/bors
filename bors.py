@@ -81,9 +81,7 @@ import github
 from time import time, strftime
 
 
-STATE_ERROR = -3
-STATE_FAILED = -2
-STATE_DISAPPROVED = -1
+STATE_BAD = -1
 
 STATE_UNREVIEWED = 0
 STATE_APPROVED = 1
@@ -270,20 +268,18 @@ class PullReq:
         return len([c for c in self.statuses if c == "error"])
 
     def current_state(self):
-        if self.count_errors():
-            return STATE_ERROR
-
         if self.closed:
             return STATE_CLOSED
 
+        if (self.count_errors() +
+            self.count_failures()) > self.count_retries():
+            return STATE_BAD
+
         if len(self.disapproval_list()) != 0:
-            return STATE_DISAPPROVED
+            return STATE_BAD
 
         if self.count_successes() != 0:
             return STATE_TESTED
-
-        if self.count_failures() > self.count_retries():
-            return STATE_FAILED
 
         if len(self.approval_list()) != 0:
             if self.count_pendings() <= self.count_retries():
