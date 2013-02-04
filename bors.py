@@ -414,8 +414,8 @@ class PullReq:
 def main():
 
     rfh = logging.handlers.RotatingFileHandler("bors.log",
-                                               backupCount=5,
-                                               maxBytes=100000)
+                                               backupCount=10,
+                                               maxBytes=1000000)
     sh = logging.StreamHandler()
     fmt = logging.Formatter(fmt='%(asctime)s - %(levelname)s - %(message)s',
                             datefmt="%Y-%m-%d %H:%M:%S %Z")
