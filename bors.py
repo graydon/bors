@@ -80,7 +80,6 @@ import logging, logging.handlers
 import github
 from time import time, strftime
 
-
 STATE_BAD = -1
 
 STATE_UNREVIEWED = 0
@@ -215,6 +214,18 @@ class PullReq:
         return [u for (u,c) in self.comments
                 if (c.startswith("r+") or
                     c.startswith("r=me"))]
+
+    def priority(self):
+        p = 0
+        for (u, c) in self.comments:
+            m = re.search(r"\bp=(-?\d+)\b", c)
+            if m != None:
+                p = max(p, int(m.group(1)))
+        return p
+
+    def prioritized_state(self):
+        return (self.current_state(),
+                self.priority())
 
     def disapproval_list(self):
         return [u for (u,c) in self.comments
@@ -510,15 +521,22 @@ def main():
     # currently-building candidate (if it exists). We then sort them
     # by ripeness and pick the one closest to landing, try to push it
     # along one step.
+    #
+    # We also apply a secondary sort order that lets the reviewers prioritize
+    # incoming pulls by putting p=<num>, with the num default to 0. Lower
+    # numbers are less important, higher are more important.
 
-    pulls = sorted(pulls, key=PullReq.current_state)
+    pulls = sorted(pulls, key=PullReq.prioritized_state)
     logging.info("got %d open pull reqs", len(pulls))
     pulls = [p for p in pulls if (p.current_state() >= STATE_UNREVIEWED
                                   and p.current_state() < STATE_CLOSED) ]
 
     logging.info("got %d viable pull reqs", len(pulls))
     for pull in pulls:
-        logging.info("%s : %d", pull.desc(), pull.current_state())
+        logging.info("(%d,%d) : %s",
+                     pull.current_state(),
+                     pull.priority(),
+                     pull.desc())
 
     if len(pulls) == 0:
         logging.info("no pull requests open")
