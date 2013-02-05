@@ -383,7 +383,8 @@ class PullReq:
                      % (self.sha, self.master_ref))
                 self.log.info(c)
                 self.add_comment(self.sha, c)
-                self.set_error(c)
+                self.reset_test_ref_to_master()
+                self.merge_pull_head_to_test_ref()
                 return
             self.log.info("%s - found pending state, checking tests", self.short())
             assert self.merge_sha != None
