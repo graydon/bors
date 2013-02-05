@@ -315,9 +315,12 @@ class PullReq:
         try:
             self.log.info(s)
             self.add_comment(self.sha, s)
+            m = ("auto merge of pull req #%d from %s/%s, r=%s" %
+                 (self.number, self.src_owner, self.src_repo,
+                  ",".join(self.approval_list())))
             j = self.dst().merges().post(base=self.test_ref,
                                          head=self.sha,
-                                         commit_message="automated merge")
+                                         commit_message=m)
             self.merge_sha = j["sha"].encode()
             u = ("https://github.com/%s/%s/commit/%s" %
                  (self.dst_owner, self.dst_repo, self.merge_sha))
