@@ -177,6 +177,7 @@ class PullReq:
         self.ref=j["head"]["ref"].encode()
         self.sha=j["head"]["sha"].encode()
         self.title=j["title"].encode()
+        self.body=j["body"].encode()
         self.merge_sha = None
         self.closed=j["state"].encode() == "closed"
         self.approved = False
@@ -314,9 +315,9 @@ class PullReq:
         try:
             self.log.info(s)
             self.add_comment(self.sha, s)
-            m = ("auto merge of pull req #%d from %s/%s, r=%s" %
-                 (self.num, self.src_owner, self.src_repo,
-                  ",".join(self.approval_list())))
+            m = ("auto merge of #%d : %s/%s/%s, r=%s\n\n%s" %
+                 (self.num, self.src_owner, self.src_repo, self.ref,
+                  ",".join(self.approval_list()), self.body))
             j = self.dst().merges().post(base=self.test_ref,
                                          head=self.sha,
                                          commit_message=m)
