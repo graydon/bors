@@ -17,7 +17,7 @@
 #
 # It requires a config file, bors.cfg, in its workspace.
 # This config file should hold the a json dictionary:
-# 
+#
 # {
 #	"owner": "<github-username-the-owner-of-repo>",
 #	"repo": "<short-github-repo-name>",
@@ -186,7 +186,7 @@ class PullReq:
         self.get_statuses()
 
     def short(self):
-        return ("%s/%s/%s = %.8s" % 
+        return ("%s/%s/%s = %.8s" %
                 (self.src_owner, self.src_repo, self.ref, self.sha))
 
     def desc(self):
@@ -254,7 +254,7 @@ class PullReq:
 
     def set_error(self, txt):
         self.set_status("error", description=txt)
-    
+
     def count_failures(self):
         return len([c for c in self.statuses if c == "failure"])
 
@@ -308,7 +308,6 @@ class PullReq:
                       self.test_ref, self.master_ref, master_sha)
         self.dst().git().refs().heads(self.test_ref).patch(sha=master_sha,
                                                            force=True)
-        
 
     def merge_pull_head_to_test_ref(self):
         s = "merging %s into %s" % (self.short(), self.test_ref)
@@ -344,7 +343,7 @@ class PullReq:
         try:
             self.dst().git().refs().heads(self.master_ref).patch(sha=self.merge_sha,
                                                                  force=False)
-            self.add_comment(self.sha, s)                
+            self.add_comment(self.sha, s)
         except github.ApiError:
             s = s + " failed"
             self.log.info(s)
@@ -410,7 +409,7 @@ class PullReq:
             self.log.info("%s - tests successful, attempting landing", self.short())
             self.advance_master_ref_to_test()
 
-                        
+
 
 def main():
 
