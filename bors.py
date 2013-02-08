@@ -81,12 +81,21 @@ import github
 from time import time, strftime
 
 STATE_BAD = -1
-
 STATE_UNREVIEWED = 0
 STATE_APPROVED = 1
 STATE_PENDING = 2
 STATE_TESTED = 3
 STATE_CLOSED = 4
+
+def state_name(n):
+    assert STATE_BAD <= n
+    assert n <= STATE_CLOSED
+    return [ "BAD",
+             "UNREVIEWED",
+             "APPROVED",
+             "PENDING",
+             "TESTED",
+             "CLOSED" ][n+1]
 
 class BuildBot:
     def __init__(self, cfg):
@@ -532,11 +541,27 @@ def main():
                                   and p.current_state() < STATE_CLOSED) ]
 
     logging.info("got %d viable pull reqs", len(pulls))
+    j = []
     for pull in pulls:
+        j.append({ "num": pull.num,
+                   "title": pull.title,
+                   "body": pull.body,
+                   "prio": pull.priority(),
+                   "src_owner": pull.src_owner,
+                   "src_repo": pull.src_repo,
+                   "ref": pull.ref,
+                   "sha": pull.sha,
+                   "state": state_name(pull.current_state()) })
+
         logging.info("(%d,%d) : %s",
                      pull.current_state(),
                      pull.priority(),
                      pull.desc())
+
+    f = open("bors-status.js", "w")
+    f.write("var bors = ")
+    json.dump(j, f)
+    f.close()
 
     if len(pulls) == 0:
         logging.info("no pull requests open")
