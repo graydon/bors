@@ -460,10 +460,7 @@ def main():
 
     logging.info("loading pull reqs")
     pulls = [ PullReq(cfg, gh, pull) for pull in
-              gh.repos(owner)(repo).pulls().get()
-
-              # For now, only consider pull reqs that start with "auto: "
-              if pull["title"].encode().startswith("auto:") ]
+              gh.repos(owner)(repo).pulls().get() ]
 
     #
     # We are reconstructing the relationship between three tree-states on the
