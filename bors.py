@@ -78,7 +78,7 @@ import sys
 import re
 import logging, logging.handlers
 import github
-from time import time, strftime
+from time import strftime, gmtime
 
 STATE_BAD = -1
 STATE_UNREVIEWED = 0
@@ -234,7 +234,8 @@ class PullReq:
 
     def prioritized_state(self):
         return (self.current_state(),
-                self.priority())
+                self.priority(),
+                -self.num)
 
     def disapproval_list(self):
         return [u for (u,c) in self.comments
@@ -530,14 +531,14 @@ def main():
     #
     # We also apply a secondary sort order that lets the reviewers prioritize
     # incoming pulls by putting p=<num>, with the num default to 0. Lower
-    # numbers are less important, higher are more important.
+    # numbers are less important, higher are more important. Also sort by
+    # negative pull-req number; this is an approximation of "oldest first" 
+    # that avoids trying to reason about dates.
 
     pulls = sorted(pulls, key=PullReq.prioritized_state)
     logging.info("got %d open pull reqs", len(pulls))
-    pulls = [p for p in pulls if (p.current_state() >= STATE_UNREVIEWED
-                                  and p.current_state() < STATE_CLOSED) ]
 
-    logging.info("got %d viable pull reqs", len(pulls))
+    # Dump state-of-world javascript fragment
     j = []
     for pull in pulls:
         j.append({ "num": pull.num,
@@ -549,16 +550,24 @@ def main():
                    "ref": pull.ref,
                    "sha": pull.sha,
                    "state": state_name(pull.current_state()) })
+    f = open("bors-status.js", "w")
+    f.write(strftime('var updated = new Date("%Y-%m-%dT%H:%M:%SZ");\n',
+                     gmtime()))
+    f.write("var bors = ")
+    json.dump(j, f)
+    f.write(";\n")
+    f.close()
 
+
+    pulls = [p for p in pulls if (p.current_state() >= STATE_UNREVIEWED
+                                  and p.current_state() < STATE_CLOSED) ]
+
+    logging.info("got %d viable pull reqs", len(pulls))
+    for pull in pulls:
         logging.info("(%d,%d) : %s",
                      pull.current_state(),
                      pull.priority(),
                      pull.desc())
-
-    f = open("bors-status.js", "w")
-    f.write("var bors = ")
-    json.dump(j, f)
-    f.close()
 
     if len(pulls) == 0:
         logging.info("no pull requests open")
