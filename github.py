@@ -53,6 +53,7 @@ except ImportError:
 from collections import Iterable
 from datetime import datetime, timedelta, tzinfo
 from StringIO import StringIO
+TIMEOUT=60
 
 _URL = 'https://api.github.com'
 _METHOD_MAP = dict(
@@ -118,7 +119,7 @@ class GitHub(object):
         request.get_method = _METHOD_MAP['POST']
         request.add_header('Accept', 'application/json')
         try:
-            response = opener.open(request)
+            response = opener.open(request, timeout=TIMEOUT)
             r = _parse_json(response.read())
             if 'error' in r:
                 raise ApiAuthError(str(r.error))
@@ -145,7 +146,7 @@ class GitHub(object):
         if method in ['POST', 'PATCH', 'PUT']:
             request.add_header('Content-Type', 'application/x-www-form-urlencoded')
         try:
-            response = opener.open(request)
+            response = opener.open(request, timeout=TIMEOUT)
             is_json = self._process_resp(response.headers)
             if is_json:
                 return _parse_json(response.read())

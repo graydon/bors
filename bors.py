@@ -80,6 +80,8 @@ import logging, logging.handlers
 import github
 from time import strftime, gmtime
 
+TIMEOUT=60
+
 STATE_BAD = -1
 STATE_UNREVIEWED = 0
 STATE_APPROVED = 1
@@ -120,7 +122,7 @@ class BuildBot:
             (self.url, builder,
              "&".join(["select=%d" % x
                        for x in range(-1, -(self.nbuilds+1), -1)]))
-        j = json.load(urllib2.urlopen(u))
+        j = json.load(urllib2.urlopen(u, timeout=TIMEOUT))
         for build in j:
             b = j[build]
             rev = None
