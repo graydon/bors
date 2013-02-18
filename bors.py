@@ -437,17 +437,20 @@ class PullReq:
 
 def main():
 
+    fmt = logging.Formatter(fmt='%(asctime)s - %(levelname)s - %(message)s',
+                            datefmt="%Y-%m-%d %H:%M:%S %Z")
+
+    if "--quiet" not in sys.argv:
+        sh = logging.StreamHandler()
+        sh.setFormatter(fmt)
+        sh.setLevel(logging.DEBUG)
+        logging.root.addHandler(sh)
+
     rfh = logging.handlers.RotatingFileHandler("bors.log",
                                                backupCount=10,
                                                maxBytes=1000000)
-    sh = logging.StreamHandler()
-    fmt = logging.Formatter(fmt='%(asctime)s - %(levelname)s - %(message)s',
-                            datefmt="%Y-%m-%d %H:%M:%S %Z")
-    sh.setFormatter(fmt)
-    sh.setLevel(logging.DEBUG)
     rfh.setFormatter(fmt)
     rfh.setLevel(logging.DEBUG)
-    logging.root.addHandler(sh)
     logging.root.addHandler(rfh)
     logging.root.setLevel(logging.DEBUG)
 
