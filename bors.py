@@ -103,8 +103,8 @@ class BuildBot:
     def __init__(self, cfg):
         self.log = logging.getLogger("buildbot")
         self.cfg = cfg
-        self.url = self.cfg["buildbot"].encode()
-        self.builders = [ x.encode() for x in self.cfg["builders"] ]
+        self.url = self.cfg["buildbot"].encode("utf8")
+        self.builders = [ x.encode("utf8") for x in self.cfg["builders"] ]
         self.nbuilds = self.cfg["nbuilds"]
         self.revs = {}
         self.get_status()
@@ -130,7 +130,7 @@ class BuildBot:
                 continue
             for props in b["properties"]:
                 if props[0] == "got_revision" and props[2] == "Source":
-                    rev = props[1].encode()
+                    rev = props[1].encode("utf8")
             if rev != None:
                 yield (rev, b)
 
@@ -175,21 +175,21 @@ class PullReq:
     def __init__(self, cfg, gh, j):
         self.cfg = cfg
         self.log = logging.getLogger("pullreq")
-        self.user = cfg["gh_user"].encode()
-        self.test_ref = cfg["test_ref"].encode()
-        self.master_ref = cfg["master_ref"].encode()
-        self.reviewers = [ r.encode() for r in cfg["reviewers"] ]
+        self.user = cfg["gh_user"].encode("utf8")
+        self.test_ref = cfg["test_ref"].encode("utf8")
+        self.master_ref = cfg["master_ref"].encode("utf8")
+        self.reviewers = [ r.encode("utf8") for r in cfg["reviewers"] ]
         self.num=j["number"]
-        self.dst_owner=cfg["owner"].encode()
-        self.dst_repo=cfg["repo"].encode()
-        self.src_owner=j["head"]["repo"]["owner"]["login"].encode()
-        self.src_repo=j["head"]["repo"]["name"].encode()
-        self.ref=j["head"]["ref"].encode()
-        self.sha=j["head"]["sha"].encode()
-        self.title=j["title"].encode()
-        self.body=j["body"].encode()
+        self.dst_owner=cfg["owner"].encode("utf8")
+        self.dst_repo=cfg["repo"].encode("utf8")
+        self.src_owner=j["head"]["repo"]["owner"]["login"].encode("utf8")
+        self.src_repo=j["head"]["repo"]["name"].encode("utf8")
+        self.ref=j["head"]["ref"].encode("utf8")
+        self.sha=j["head"]["sha"].encode("utf8")
+        self.title=j["title"].encode("utf8")
+        self.body=j["body"].encode("utf8")
         self.merge_sha = None
-        self.closed=j["state"].encode() == "closed"
+        self.closed=j["state"].encode("utf8") == "closed"
         self.approved = False
         self.testpass = False
         self.gh = gh
@@ -215,10 +215,10 @@ class PullReq:
         logging.info("loading comments on %s", self.short())
         cs = self.src().commits(self.sha).comments().get()
         self.comments = [
-            (c["user"]["login"].encode(),
-             c["body"].encode())
+            (c["user"]["login"].encode("utf8"),
+             c["body"].encode("utf8"))
             for c in cs
-            if c["user"]["login"].encode() in self.reviewers
+            if c["user"]["login"].encode("utf8") in self.reviewers
             ]
 
     def approval_list(self):
@@ -258,9 +258,9 @@ class PullReq:
     def get_statuses(self):
         ss = self.dst().statuses(self.sha).get()
         logging.info("loading statuses of %s", self.short())
-        self.statuses = [ s["state"].encode()
+        self.statuses = [ s["state"].encode("utf8")
                           for s in ss
-                          if s["creator"]["login"].encode() == self.user]
+                          if s["creator"]["login"].encode("utf8") == self.user]
 
     def set_status(self, s, **kwargs):
         self.log.info("%s - setting status: %s (%s)",
@@ -327,7 +327,7 @@ class PullReq:
 
     def reset_test_ref_to_master(self):
         j = self.dst().git().refs().heads(self.master_ref).get()
-        master_sha = j["object"]["sha"].encode()
+        master_sha = j["object"]["sha"].encode("utf8")
         self.log.info("resetting %s to %s = %.8s",
                       self.test_ref, self.master_ref, master_sha)
         self.dst().git().refs().heads(self.test_ref).patch(sha=master_sha,
@@ -344,7 +344,7 @@ class PullReq:
             j = self.dst().merges().post(base=self.test_ref,
                                          head=self.sha,
                                          commit_message=m)
-            self.merge_sha = j["sha"].encode()
+            self.merge_sha = j["sha"].encode("utf8")
             u = ("https://github.com/%s/%s/commit/%s" %
                  (self.dst_owner, self.dst_repo, self.merge_sha))
             s = "%s merged ok, testing candidate = %.8s" % (self.short(),
@@ -458,11 +458,11 @@ def main():
     logging.info("loading bors.cfg")
     cfg = json.load(open("bors.cfg"))
 
-    gh = github.GitHub(username=cfg["gh_user"].encode(),
-                       password=cfg["gh_pass"].encode())
+    gh = github.GitHub(username=cfg["gh_user"].encode("utf8"),
+                       password=cfg["gh_pass"].encode("utf8"))
 
-    owner = cfg["owner"].encode()
-    repo = cfg["repo"].encode()
+    owner = cfg["owner"].encode("utf8")
+    repo = cfg["repo"].encode("utf8")
 
     logging.info("loading pull reqs")
     pulls = [ PullReq(cfg, gh, pull) for pull in
@@ -505,14 +505,14 @@ def main():
     # if we get it right.
     #
 
-    test_ref = cfg["test_ref"].encode()
-    master_ref = cfg["master_ref"].encode()
+    test_ref = cfg["test_ref"].encode("utf8")
+    master_ref = cfg["master_ref"].encode("utf8")
     test_head = gh.repos(owner)(repo).git().refs().heads(test_ref).get()
     master_head = gh.repos(owner)(repo).git().refs().heads(master_ref).get()
-    test_sha = test_head["object"]["sha"].encode()
-    master_sha = master_head["object"]["sha"].encode()
+    test_sha = test_head["object"]["sha"].encode("utf8")
+    master_sha = master_head["object"]["sha"].encode("utf8")
     test_commit = gh.repos(owner)(repo).git().commits(test_sha).get()
-    test_parents = [ x["sha"].encode() for x in test_commit["parents"] ]
+    test_parents = [ x["sha"].encode("utf8") for x in test_commit["parents"] ]
     candidate_sha = None
     if len(test_parents) == 2 and master_sha in test_parents:
         test_parents.remove(master_sha)
