@@ -131,7 +131,7 @@ class BuildBot:
             if "properties" not in b:
                 continue
             for props in b["properties"]:
-                if props[0] == "got_revision" and props[2] == "Source":
+                if props[0] == "got_revision" and props[2] in ("Source", "Git"):
                     rev = props[1].encode("utf8")
             if rev != None:
                 yield (rev, b)
