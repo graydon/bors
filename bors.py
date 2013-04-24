@@ -80,6 +80,8 @@ import logging, logging.handlers
 import github
 from time import strftime, gmtime
 
+__version__ = '1.0'
+
 TIMEOUT=60
 
 STATE_BAD = -1
