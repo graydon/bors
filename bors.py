@@ -115,13 +115,15 @@ class BuildBot:
             for (rev, b) in self.rev_build_pairs(builder):
                 if not (rev in self.revs):
                     self.revs[rev] = {}
-                self.revs[rev][builder] = b
+                if not (builder in self.revs[rev]):
+                    self.revs[rev][builder] = b
 
     def rev_build_pairs(self, builder):
         u = "%s/json/builders/%s/builds?%s" % \
             (self.url, builder,
              "&".join(["select=%d" % x
                        for x in range(-1, -(self.nbuilds+1), -1)]))
+        self.log.info("fetching " + u)
         j = json.load(urllib2.urlopen(u, timeout=TIMEOUT))
         for build in j:
             b = j[build]
@@ -142,14 +144,20 @@ class BuildBot:
 
             for builder in self.builders:
                 if builder not in self.revs[sha]:
+                    self.log.info("missing info for builder %s on %s"
+                                  % (builder, sha))
                     return (None, [])
 
             passes = []
             failures = []
 
             for builder in self.builders:
+                self.log.info("checking results for %s on %s"
+                              % (builder, sha))
                 b = self.revs[sha][builder]
                 if "results" in b:
+                    self.log.info("got results %s for %s on %s"
+                                  % (b["results"], builder, sha))
                     u = ("%s/builders/%s/builds/%s" %
                          (self.url, builder, b["number"]))
                     if b["results"] == 0 or b["results"] == 1:
@@ -167,6 +175,7 @@ class BuildBot:
                 return (None, [])
 
         else:
+            self.log.info("missing info sha %s" % sha)
             return (None, [])
 
 
