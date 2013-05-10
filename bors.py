@@ -54,7 +54,7 @@
 # - sort them by the STATE_* values below
 # - pick the ripest (latest-state) one and try to advance it, meaning:
 #
-#   - if state==UNREVIEWED, look for r+ or r-:
+#   - if state==UNREVIEWED or DISCUSSING, look for r+ or r-:
 #     if r+, set APPROVED
 #     if r-, set DISAPPROVED
 #     (if nothing is said, exit; nothing to do!)
@@ -84,22 +84,26 @@ __version__ = '1.0'
 
 TIMEOUT=60
 
-STATE_BAD = -1
-STATE_UNREVIEWED = 0
-STATE_APPROVED = 1
-STATE_PENDING = 2
-STATE_TESTED = 3
-STATE_CLOSED = 4
+STATE_BAD = -2
+STATE_STALE = -1
+STATE_DISCUSSING = 0
+STATE_UNREVIEWED = 1
+STATE_APPROVED = 2
+STATE_PENDING = 3
+STATE_TESTED = 4
+STATE_CLOSED = 5
 
 def state_name(n):
     assert STATE_BAD <= n
     assert n <= STATE_CLOSED
     return [ "BAD",
+             "STALE",
+             "DISCUSSING",
              "UNREVIEWED",
              "APPROVED",
              "PENDING",
              "TESTED",
-             "CLOSED" ][n+1]
+             "CLOSED" ][n+2]
 
 class BuildBot:
     def __init__(self, cfg):
@@ -144,16 +148,16 @@ class BuildBot:
 
         if sha in self.revs:
 
-            for builder in self.builders:
-                if builder not in self.revs[sha]:
-                    self.log.info("missing info for builder %s on %s"
-                                  % (builder, sha))
-                    return (None, [])
-
             passes = []
             failures = []
 
             for builder in self.builders:
+
+                if builder not in self.revs[sha]:
+                    self.log.info("missing info for builder %s on %s"
+                                  % (builder, sha))
+                    continue
+
                 self.log.info("checking results for %s on %s"
                               % (builder, sha))
                 b = self.revs[sha][builder]
@@ -204,8 +208,18 @@ class PullReq:
         self.approved = False
         self.testpass = False
         self.gh = gh
-        self.get_comments()
-        self.get_statuses()
+
+        # Not really, but github often lies about the result or returns
+        # wrong data here, and we don't want to waste anyone's time with
+        # "your patch bitrotted" when it hasn't.
+        self.mergeable = True  
+
+        self.pull_comments = []
+        self.head_comments = []
+        self.get_pull_comments()
+        self.get_head_comments()
+        self.get_head_statuses()
+        self.get_mergeable()
 
     def short(self):
         return ("%s/%s/%s = %.8s" %
@@ -222,24 +236,51 @@ class PullReq:
     def dst(self):
         return self.gh.repos(self.dst_owner)(self.dst_repo)
 
-    def get_comments(self):
-        logging.info("loading comments on %s", self.short())
+    def get_pull_comments(self):
+        logging.info("loading pull and issue comments on pull #%d", self.num)
+        cs = (self.dst().pulls(self.num).comments().get()
+              + self.dst().issues(self.num).comments().get())
+        self.pull_comments = [
+            (c["created_at"].encode("utf8"),
+             c["user"]["login"].encode("utf8"),
+             c["body"].encode("utf8"))
+            for c in cs
+            ]
+
+    def get_head_comments(self):
+        logging.info("loading head comments on %s", self.short())
         cs = self.src().commits(self.sha).comments().get()
-        self.comments = [
-            (c["user"]["login"].encode("utf8"),
+        self.head_comments = [
+            (c["created_at"].encode("utf8"),
+             c["user"]["login"].encode("utf8"),
              c["body"].encode("utf8"))
             for c in cs
             if c["user"]["login"].encode("utf8") in self.reviewers
             ]
 
+    def all_comments(self):
+        a = self.head_comments + self.pull_comments
+        a = sorted(a, key=lambda c: c[0])
+        return a
+
+    def last_comment(self):
+        a = self.all_comments()
+        if len(a) > 0:
+            return a[-1]
+        else:
+            return ("","","")
+
     def approval_list(self):
-        return [u for (u,c) in self.comments
-                if (c.startswith("r+") or
-                    c.startswith("r=me"))]
+        return ([u for (d,u,c) in self.head_comments
+                 if (c.startswith("r+") or
+                     c.startswith("r=me"))] +
+                [ m.group(1)
+                  for (_,_,c) in self.head_comments 
+                  for m in [re.match(r"^r=(\w+)", c)] if m ])
 
     def priority(self):
         p = 0
-        for (u, c) in self.comments:
+        for (d, u, c) in self.head_comments:
             m = re.search(r"\bp=(-?\d+)\b", c)
             if m != None:
                 p = max(p, int(m.group(1)))
@@ -251,12 +292,21 @@ class PullReq:
                 -self.num)
 
     def disapproval_list(self):
-        return [u for (u,c) in self.comments
+        return [u for (d,u,c) in self.head_comments
                 if c.startswith("r-")]
 
     def count_retries(self):
-        return len([c for (u,c) in self.comments if (
+        return len([c for (d,u,c) in self.head_comments if (
                     c.startswith("@bors: retry"))])
+
+    # annoyingly, even though we're starting from a "pull" json
+    # blob, this blob does not have the "mergeable" flag; only
+    # the one you get by re-requesting the _specific_ pull
+    # comes with that. It also often returns None rather than
+    # True or False. Yay.
+    def get_mergeable(self):
+        logging.info("loading mergeability of %d", self.num)        
+        self.mergeable = self.dst().pulls(self.num).get()["mergeable"]
 
     # github lets us externalize states as such:
     #
@@ -266,7 +316,7 @@ class PullReq:
     # {success} -- tests passed, time to move master
     # {error} -- tests passed but merging failed (or other error)!
 
-    def get_statuses(self):
+    def get_head_statuses(self):
         ss = self.dst().statuses(self.sha).get()
         logging.info("loading statuses of %s", self.short())
         self.statuses = [ s["state"].encode("utf8")
@@ -303,6 +353,7 @@ class PullReq:
         return len([c for c in self.statuses if c == "error"])
 
     def current_state(self):
+
         if self.closed:
             return STATE_CLOSED
 
@@ -316,11 +367,17 @@ class PullReq:
         if self.count_successes() != 0:
             return STATE_TESTED
 
+        if self.mergeable == False:
+            return STATE_STALE
+
         if len(self.approval_list()) != 0:
             if self.count_pendings() <= self.count_retries():
                 return STATE_APPROVED
             else:
                 return STATE_PENDING
+
+        if len(self.all_comments()) != 0:
+            return STATE_DISCUSSING
 
         return STATE_UNREVIEWED
 
@@ -399,7 +456,7 @@ class PullReq:
 
         self.log.info("considering %s", self.desc())
 
-        if s == STATE_UNREVIEWED:
+        if s == STATE_UNREVIEWED or s == STATE_DISCUSSING:
             self.log.info("%s - waiting on review", self.short())
 
         elif s == STATE_APPROVED:
@@ -475,9 +532,20 @@ def main():
     owner = cfg["owner"].encode("utf8")
     repo = cfg["repo"].encode("utf8")
 
-    logging.info("loading pull reqs")
+    more_pulls = True
+    all_pulls = []
+    page = 1
+    while more_pulls:
+        logging.info("loading pull reqs (page %d)", page)
+        pulls = gh.repos(owner)(repo).pulls().get(per_page=100,
+                                                  page=page)
+        all_pulls.extend(pulls)
+        if len(pulls) == 0:
+            more_pulls = False
+        page += 1
+
     pulls = [ PullReq(cfg, gh, pull) for pull in
-              gh.repos(owner)(repo).pulls().get() ]
+              all_pulls ]
 
     #
     # We are reconstructing the relationship between three tree-states on the
@@ -563,6 +631,10 @@ def main():
                    "prio": pull.priority(),
                    "src_owner": pull.src_owner,
                    "src_repo": pull.src_repo,
+                   "num_comments": len(pull.head_comments +
+                                       pull.pull_comments),
+                   "last_comment": pull.last_comment(),
+                   "approvals": pull.approval_list(),
                    "ref": pull.ref,
                    "sha": pull.sha,
                    "state": state_name(pull.current_state()) })
