@@ -1,0 +1,83 @@
+
+body {
+    background: white;
+	font-size: small;
+}
+
+.header {
+    text-align: center;
+    padding: 0.5em;
+    background: white;
+}
+
+#queue {
+    margin: em;
+    border: 1px black solid;
+}
+
+.PENDING {
+    background: lime;
+}
+
+.APPROVED {
+    background: palegreen;
+}
+
+.DISCUSSING {
+    background: lightblue;
+}
+
+.STALE {
+    background: orange;
+}
+
+.BAD {
+    background: red;
+}
+
+.TESTED, .CLOSED {
+    background: white;
+    border: dashed lime 1px;
+}
+
+.title {
+    text-decoration: underline;
+}
+
+.commentheader {
+	word-spacing: 2em;
+}
+
+.commentbody {
+	margin-top: 0.25em;
+	width: 50em;
+	font-style: italic;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.comment {
+	font-size: x-small;
+	margin: 1em;
+	spacing: 0.25em;
+	padding-left: 0.25em;
+	border-left: 2px solid gray;
+}
+
+td.details {
+	width: 80%;
+}
+
+td {
+	vertical-align: text-top;
+    padding-left: 0.25em;
+    padding-right: 0.25em;
+	padding-top: 0.1em;
+	padding-bottom: 0.1em;
+}
+tr {
+	padding: 0;
+}
+tr:nth-child(even) { background: #f0f0f0; }
+tr:nth-child(odd) { background: white; }
