@@ -80,7 +80,7 @@ import logging, logging.handlers
 import github
 from time import strftime, gmtime
 
-__version__ = '1.0'
+__version__ = '1.1'
 
 TIMEOUT=60
 
@@ -137,7 +137,7 @@ class BuildBot:
             if "properties" not in b:
                 continue
             for props in b["properties"]:
-                if props[0] == "got_revision" and props[2] in ("Source", "Git"):
+                if props[0] == "got_revision" and props[2] in ("Source", "Git", "SetProperty Step"):
                     rev = props[1].encode("utf8")
             if rev != None:
                 yield (rev, b)
