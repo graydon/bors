@@ -121,8 +121,12 @@ class BuildBot:
             for (rev, b) in self.rev_build_pairs(builder):
                 if not (rev in self.revs):
                     self.revs[rev] = {}
-                if not (builder in self.revs[rev]):
-                    self.revs[rev][builder] = b
+
+                # result 5 is "interrupted", we don't care about those hiccups.
+                # assume things were retried.
+                if "results" in b and b["results"] != 5:
+                    if not (builder in self.revs[rev]):
+                        self.revs[rev][builder] = b
 
     def rev_build_pairs(self, builder):
         u = "%s/json/builders/%s/builds?%s" % \
@@ -184,7 +188,11 @@ class BuildBot:
             self.log.info("missing info sha %s" % sha)
             return (None, [])
 
-
+def ustr(s):
+    if s == None:
+        return ""
+    else:
+        return s.encode("utf8")
 
 class PullReq:
     def __init__(self, cfg, gh, j):
@@ -201,8 +209,8 @@ class PullReq:
         self.src_repo=j["head"]["repo"]["name"].encode("utf8")
         self.ref=j["head"]["ref"].encode("utf8")
         self.sha=j["head"]["sha"].encode("utf8")
-        self.title=j["title"].encode("utf8")
-        self.body=j["body"].encode("utf8")
+        self.title=ustr(j["title"])
+        self.body=ustr(j["body"])
         self.merge_sha = None
         self.closed=j["state"].encode("utf8") == "closed"
         self.approved = False
@@ -216,10 +224,17 @@ class PullReq:
 
         self.pull_comments = []
         self.head_comments = []
-        self.get_pull_comments()
-        self.get_head_comments()
-        self.get_head_statuses()
-        self.get_mergeable()
+        self.loaded_ok = False
+        try:
+            self.get_pull_comments()
+            self.get_head_comments()
+            self.get_head_statuses()
+            self.get_mergeable()
+            self.loaded_ok = True
+        except:
+            self.log.info("github exception on pull req %d" % self.num)
+            self.loaded_ok = False
+
 
     def short(self):
         return ("%s/%s/%s = %.8s" %
@@ -243,7 +258,7 @@ class PullReq:
         self.pull_comments = [
             (c["created_at"].encode("utf8"),
              c["user"]["login"].encode("utf8"),
-             c["body"].encode("utf8"))
+             ustr(c["body"]))
             for c in cs
             ]
 
@@ -253,7 +268,7 @@ class PullReq:
         self.head_comments = [
             (c["created_at"].encode("utf8"),
              c["user"]["login"].encode("utf8"),
-             c["body"].encode("utf8"))
+             ustr(c["body"]))
             for c in cs
             if c["user"]["login"].encode("utf8") in self.reviewers
             ]
@@ -546,6 +561,8 @@ def main():
 
     pulls = [ PullReq(cfg, gh, pull) for pull in
               all_pulls ]
+
+    pulls = [ pull for pull in pulls if pull.loaded_ok ]
 
     #
     # We are reconstructing the relationship between three tree-states on the
