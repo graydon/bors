@@ -224,16 +224,11 @@ class PullReq:
 
         self.pull_comments = []
         self.head_comments = []
-        self.loaded_ok = False
-        try:
-            self.get_pull_comments()
-            self.get_head_comments()
-            self.get_head_statuses()
-            self.get_mergeable()
-            self.loaded_ok = True
-        except:
-            self.log.info("github exception on pull req %d" % self.num)
-            self.loaded_ok = False
+        self.get_pull_comments()
+        self.get_head_comments()
+        self.get_head_statuses()
+        self.get_mergeable()
+        self.loaded_ok = True
 
 
     def short(self):
@@ -561,8 +556,6 @@ def main():
 
     pulls = [ PullReq(cfg, gh, pull) for pull in
               all_pulls ]
-
-    pulls = [ pull for pull in pulls if pull.loaded_ok ]
 
     #
     # We are reconstructing the relationship between three tree-states on the
