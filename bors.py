@@ -84,6 +84,16 @@ __version__ = '1.1'
 
 TIMEOUT=60
 
+BUILDBOT_STATUS_SUCCESS = 0
+BUILDBOT_STATUS_WARNINGS = 1
+BUILDBOT_STATUS_FAILURE = 2
+BUILDBOT_STATUS_SKIPPED = 3
+BUILDBOT_STATUS_EXCEPTION = 4
+BUILDBOT_STATUS_RETRY = 5
+
+def build_has_status(b, s):
+    return "results" in b and b["results"] == s
+
 STATE_BAD = -2
 STATE_STALE = -1
 STATE_DISCUSSING = 0
@@ -122,9 +132,7 @@ class BuildBot:
                 if not (rev in self.revs):
                     self.revs[rev] = {}
 
-                # result 5 is "interrupted", we don't care about those hiccups.
-                # assume things were retried.
-                if "results" in b and b["results"] != 5:
+                if "results" in b and (not build_has_status(b, BUILDBOT_STATUS_RETRY)):
                     if not (builder in self.revs[rev]):
                         self.revs[rev][builder] = b
 
@@ -147,13 +155,19 @@ class BuildBot:
                 yield (rev, b)
 
     # returns a pair: a tri-state (False=failure, True=pass, None=waiting)
-    # coupled with a list of URLs to post back as status-details
+    # coupled with two lists of URLs to post back as status-details. When
+    # successful, the first URL-list is the successes and the second is the
+    # warnings; when failing, the first URL-list is the failures and the
+    # second is the exceptions.
     def test_status(self, sha):
 
         if sha in self.revs:
 
             passes = []
+            warnings = []
+
             failures = []
+            exceptions = []
 
             for builder in self.builders:
 
@@ -170,23 +184,27 @@ class BuildBot:
                                   % (b["results"], builder, sha))
                     u = ("%s/builders/%s/builds/%s" %
                          (self.url, builder, b["number"]))
-                    if b["results"] == 0 or b["results"] == 1:
+                    if build_has_status(b, BUILDBOT_STATUS_SUCCESS):
                         passes.append(u)
-                    elif b["results"] == 2 or b["results"] == 4:
-                        failures.append(u)
+                    elif build_has_status(b, BUILDBOT_STATUS_WARNINGS):
+                        warnings.append(u)
+                    elif build_has_status(b, BUILDBOT_STATUS_FAILURE):
+                        warnings.append(u)
+                    elif build_has_status(b, BUILDBOT_STATUS_EXCEPTION):
+                        exceptioins.append(u)
 
-            if len(failures) > 0:
-                return (False, failures)
+            if len(failures) > 0 or len(exceptions) > 0:
+                return (False, failures, exceptions)
 
-            elif len(passes) == len(self.builders):
-                return (True, passes)
+            elif len(passes) + len(warnings) == len(self.builders):
+                return (True, passes, warnings)
 
             else:
-                return (None, [])
+                return (None, [], [])
 
         else:
             self.log.info("missing info sha %s" % sha)
-            return (None, [])
+            return (None, [], [])
 
 def ustr(s):
     if s == None:
@@ -493,17 +511,30 @@ class PullReq:
             self.log.info("%s - found pending state, checking tests", self.short())
             assert self.merge_sha != None
             bb = BuildBot(self.cfg)
-            (t, urls) = bb.test_status(self.merge_sha)
+            (t, main_urls, extra_urls) = bb.test_status(self.merge_sha)
+
             if t == True:
                 self.log.info("%s - tests passed, marking success", self.short())
-                c = "all tests pass:\n" + "\n".join(urls)
+                c = "all tests pass:"
+                for url in main_urls:
+                    c += "\nsuccess: " + url 
+                for url in extra_urls:
+                    c += "\nwarning: " + url
+                c += "\n"
                 self.add_comment(self.sha, c)
                 self.set_success("all tests passed")
+
             elif t == False:
                 self.log.info("%s - tests failed, marking failure", self.short())
-                c = "some tests failed:\n" + "\n".join(urls)
+                c = "some tests failed:"
+                for url in main_urls:
+                    c += "\nfailure: " + url 
+                for url in extra_urls:
+                    c += "\nexception: " + url
+                c += "\n"
                 self.add_comment(self.sha, c)
                 self.set_failure("some tests failed")
+
             else:
                 self.log.info("%s - no info yet, waiting on tests", self.short())
 
