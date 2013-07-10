@@ -191,7 +191,7 @@ class BuildBot:
                     elif build_has_status(b, BUILDBOT_STATUS_FAILURE):
                         warnings.append(u)
                     elif build_has_status(b, BUILDBOT_STATUS_EXCEPTION):
-                        exceptioins.append(u)
+                        exceptions.append(u)
 
             if len(failures) > 0 or len(exceptions) > 0:
                 return (False, failures, exceptions)
