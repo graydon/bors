@@ -189,7 +189,7 @@ class BuildBot:
                     elif build_has_status(b, BUILDBOT_STATUS_WARNINGS):
                         warnings.append(u)
                     elif build_has_status(b, BUILDBOT_STATUS_FAILURE):
-                        warnings.append(u)
+                        failures.append(u)
                     elif build_has_status(b, BUILDBOT_STATUS_EXCEPTION):
                         exceptions.append(u)
 
