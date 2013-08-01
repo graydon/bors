@@ -688,7 +688,7 @@ def main():
     f.close()
 
 
-    pulls = [p for p in pulls if (p.current_state() >= STATE_UNREVIEWED
+    pulls = [p for p in pulls if (p.current_state() >= STATE_DISCUSSING
                                   and p.current_state() < STATE_CLOSED) ]
 
     logging.info("got %d viable pull reqs", len(pulls))
