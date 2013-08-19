@@ -567,8 +567,14 @@ def main():
     logging.info("loading bors.cfg")
     cfg = json.load(open("bors.cfg"))
 
-    gh = github.GitHub(username=cfg["gh_user"].encode("utf8"),
-                       password=cfg["gh_pass"].encode("utf8"))
+    gh = None
+    if "gh_pass" in cfg:
+        gh = github.GitHub(username=cfg["gh_user"].encode("utf8"),
+                           password=cfg["gh_pass"].encode("utf8"))
+    else:
+        gh = github.GitHub(username=cfg["gh_user"].encode("utf8"),
+                           access_token=cfg["gh_token"].encode("utf8"))
+
 
     owner = cfg["owner"].encode("utf8")
     repo = cfg["repo"].encode("utf8")
@@ -708,5 +714,9 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except github.ApiError as e:
+        print("Github API exception: " + str(e.response))
+        exit(-1)
 
