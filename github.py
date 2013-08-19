@@ -131,6 +131,7 @@ class GitHub(object):
         return _Callable(self, '/%s' % attr)
 
     def _http(self, method, path, **kw):
+        nretries = 4
         data = None
         params = None
         if method=='GET' and kw:
@@ -145,20 +146,26 @@ class GitHub(object):
             request.add_header('Authorization', self._authorization)
         if method in ['POST', 'PATCH', 'PUT']:
             request.add_header('Content-Type', 'application/x-www-form-urlencoded')
-        try:
-            response = opener.open(request, timeout=TIMEOUT)
-            is_json = self._process_resp(response.headers)
-            if is_json:
-                return _parse_json(response.read())
-        except urllib2.HTTPError, e:
-            is_json = self._process_resp(e.headers)
-            if is_json:
-                json = _parse_json(e.read())
-            req = JsonObject(method=method, url=url)
-            resp = JsonObject(code=e.code, json=json)
-            if resp.code==404:
-                raise ApiNotFoundError(url, req, resp)
-            raise ApiError(url, req, resp)
+        while True:
+            try:
+                response = opener.open(request, timeout=TIMEOUT)
+                is_json = self._process_resp(response.headers)
+                if is_json:
+                    return _parse_json(response.read())
+            except urllib2.HTTPError, e:
+                if nretries > 0:
+                    nretries -= 1
+                    print "temporary HTTP error, retrying up to %d times..." % nretries
+                    continue
+                is_json = self._process_resp(e.headers)
+                json = None
+                if is_json:
+                    json = _parse_json(e.read())
+                req = JsonObject(method=method, url=url)
+                resp = JsonObject(code=e.code, json=json)
+                if resp.code==404:
+                    raise ApiNotFoundError(url, req, resp)
+                raise ApiError(url, req, resp)
 
     def _process_resp(self, headers):
         is_json = False
