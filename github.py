@@ -131,7 +131,7 @@ class GitHub(object):
         return _Callable(self, '/%s' % attr)
 
     def _http(self, method, path, **kw):
-        nretries = 4
+        nretries = 10
         data = None
         params = None
         if method=='GET' and kw:
