@@ -1,5 +1,13 @@
 #!/usr/bin/env python
-
+#
+# Copyright 2013 Mozilla Foundation.
+#
+# Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
+# http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
+# <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
+# option. This file may not be copied, modified, or distributed
+# except according to those terms.
+#
 # Bors is an automated integrator for github and buildbot.
 #
 # It's written for the rust project, so probably contains a
@@ -19,31 +27,31 @@
 # This config file should hold the a json dictionary:
 #
 # {
-#	"owner": "<github-username-the-owner-of-repo>",
-#	"repo": "<short-github-repo-name>",
-#	"reviewers": ["<user1>", "<user2>", ...],
-#	"builders": ["<buildbot-builder1>", "<buildbot-builder2>", ...],
-#	"test_ref": "<git-ref-for-testing>",
-#	"master_ref": "<git-ref-for-integration>",
-#	"nbuilds": <number-of-buildbot-builds-history-to-look-at>,
-#	"buildbot": "<buildbot-url>",
-#	"gh_user": "<github-user-to-run-as>",
-#	"gh_pass": "<password-for-that-user>"
+#       "owner": "<github-username-the-owner-of-repo>",
+#       "repo": "<short-github-repo-name>",
+#       "reviewers": ["<user1>", "<user2>", ...],
+#       "builders": ["<buildbot-builder1>", "<buildbot-builder2>", ...],
+#       "test_ref": "<git-ref-for-testing>",
+#       "master_ref": "<git-ref-for-integration>",
+#       "nbuilds": <number-of-buildbot-builds-history-to-look-at>,
+#       "buildbot": "<buildbot-url>",
+#       "gh_user": "<github-user-to-run-as>",
+#       "gh_pass": "<password-for-that-user>"
 # }
 #
 # For example, the rust config at the time of writing (minus password) is:
 #
 # {
-#	"owner": "mozilla",
-#	"repo": "rust",
-#	"reviewers": ["brson", "catamorphism", "graydon", "nikomatsakis", "pcwalton"],
-#	"builders": ["auto-linux", "auto-win", "auto-bsd", "auto-mac"],
-#	"test_ref": "auto",
-#	"master_ref": "incoming",
-#	"nbuilds": 5,
-#	"buildbot": "http://buildbot.rust-lang.org",
-#	"gh_user": "bors",
-#	"gh_pass": "..."
+#       "owner": "mozilla",
+#       "repo": "rust",
+#       "reviewers": ["brson", "catamorphism", "graydon", "nikomatsakis", "pcwalton"],
+#       "builders": ["auto-linux", "auto-win", "auto-bsd", "auto-mac"],
+#       "test_ref": "auto",
+#       "master_ref": "incoming",
+#       "nbuilds": 5,
+#       "buildbot": "http://buildbot.rust-lang.org",
+#       "gh_user": "bors",
+#       "gh_pass": "..."
 # }
 #
 #
@@ -238,7 +246,7 @@ class PullReq:
         # Not really, but github often lies about the result or returns
         # wrong data here, and we don't want to waste anyone's time with
         # "your patch bitrotted" when it hasn't.
-        self.mergeable = True  
+        self.mergeable = True
 
         self.pull_comments = []
         self.head_comments = []
@@ -303,7 +311,7 @@ class PullReq:
                  if (c.startswith("r+") or
                      c.startswith("r=me"))] +
                 [ m.group(1)
-                  for (_,_,c) in self.head_comments 
+                  for (_,_,c) in self.head_comments
                   for m in [re.match(r"^r=(\w+)", c)] if m ])
 
     def priority(self):
@@ -333,7 +341,7 @@ class PullReq:
     # comes with that. It also often returns None rather than
     # True or False. Yay.
     def get_mergeable(self):
-        logging.info("loading mergeability of %d", self.num)        
+        logging.info("loading mergeability of %d", self.num)
         self.mergeable = self.dst().pulls(self.num).get()["mergeable"]
 
     # github lets us externalize states as such:
@@ -663,7 +671,7 @@ def main():
     # We also apply a secondary sort order that lets the reviewers prioritize
     # incoming pulls by putting p=<num>, with the num default to 0. Lower
     # numbers are less important, higher are more important. Also sort by
-    # negative pull-req number; this is an approximation of "oldest first" 
+    # negative pull-req number; this is an approximation of "oldest first"
     # that avoids trying to reason about dates.
 
     pulls = sorted(pulls, key=PullReq.prioritized_state)
