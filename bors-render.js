@@ -19,7 +19,8 @@ function render_queue() {
 
         var num = e["num"].toString();
         var num_cell = elt("td");
-        num_cell.appendChild(a_txt_class_url(num, "pull", "https://github.com/mozilla/rust/pull/" + num));
+        var repo = e["src_owner"] + "/" + e["src_repo"] + "/"
+        num_cell.appendChild(a_txt_class_url(num, "pull", "https://github.com/" + repo + "pull/" + num));
         row.appendChild(num_cell);
 
 		var state = e["state"];
@@ -27,7 +28,7 @@ function render_queue() {
 
         row.appendChild(elt_txt_class("td", e["prio"].toString(), "priority"));
 
-        var ref = e["src_owner"] + "/" + e["src_repo"] + "/" + e["ref"];
+        var ref = repo + e["ref"];
         row.appendChild(elt_txt_class("td", ref, "ref"));
 
 		var t = e["title"]
