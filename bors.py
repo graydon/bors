@@ -472,18 +472,17 @@ class PullReq:
             self.dst().git().refs().heads(self.master_ref).patch(sha=self.merge_sha,
                                                                  force=False)
             self.add_comment(self.sha, s)
+            try:
+                self.dst().pulls(self.num).patch(state="closed")
+                self.closed = True
+            except github.ApiError:
+                self.log.info("closing failed; auto-closed after merge?")
         except github.ApiError:
             s = s + " failed"
             self.log.info(s)
             self.add_comment(self.sha, s)
             self.set_error(s)
 
-        try:
-            self.dst().pulls(self.num).patch(state="closed")
-            self.closed = True
-        except github.ApiError:
-            self.log.info("closing failed; auto-closed after merge?")
-            pass
 
 
 
