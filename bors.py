@@ -333,7 +333,7 @@ class PullReq:
 
     def count_retries(self):
         return len([c for (d,u,c) in self.head_comments if (
-                    c.startswith("@bors: retry"))])
+                    c.startswith("@"+self.user+": retry"))])
 
     # annoyingly, even though we're starting from a "pull" json
     # blob, this blob does not have the "mergeable" flag; only
