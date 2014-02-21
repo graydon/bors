@@ -254,6 +254,7 @@ class PullReq:
         self.get_head_comments()
         self.get_head_statuses()
         self.get_mergeable()
+        self.get_merge_sha()
         self.loaded_ok = True
 
 
@@ -388,6 +389,19 @@ class PullReq:
     def count_errors(self):
         return len([c for c in self.statuses if c == "error"])
 
+    def get_merge_sha(self):
+        # Find the newest 'pending' status and parse the SHA out of that
+        ss = self.dst().statuses(self.sha).get()
+        logging.info("loading statuses of %s", self.short())
+        statusdescs = [ s["description"].encode("utf8")
+                          for s in ss
+                          if s["creator"]["login"].encode("utf8") == self.user and s["state"].encode("utf8") == "pending"]
+        if len(statusdescs) > 0:
+            # parse it
+            m = re.match(r"running tests for candidate ([a-z0-9]+)", statusdescs[0])
+            if m:
+                self.merge_sha = m.group(1)
+
     def current_state(self):
 
         if self.closed:
@@ -455,7 +469,7 @@ class PullReq:
                                                             self.merge_sha)
             self.log.info(s)
             self.add_comment(self.sha, s)
-            self.set_pending("running tests", u)
+            self.set_pending("running tests for candidate %s" % self.merge_sha, u)
 
         except github.ApiError:
             s = s + " failed"
@@ -483,8 +497,25 @@ class PullReq:
             self.add_comment(self.sha, s)
             self.set_error(s)
 
+    def fresh(self):
+        # NOTE: only call this when needed,
+        # as the result may change as other
+        # PRs are advanced
 
-
+        # a PR is fresh if the two
+        # parents of the merge sha are
+        # the tip of the merge-target and the
+        # feature branch
+        owner = self.cfg["owner"].encode("utf8")
+        repo = self.cfg["repo"].encode("utf8")
+        master_ref = self.cfg["master_ref"].encode("utf8")
+        master_head = self.gh.repos(owner)(repo).git().refs().heads(master_ref).get()
+        master_sha = master_head["object"]["sha"].encode("utf8")
+        test_commit = self.gh.repos(owner)(repo).git().commits(self.merge_sha).get()
+        test_parents = [ x["sha"].encode("utf8") for x in test_commit["parents"] ]
+        return (len(test_parents) == 2 and
+                master_sha in test_parents and
+                self.sha in test_parents)
 
     def try_advance(self):
         s = self.current_state()
@@ -507,9 +538,9 @@ class PullReq:
             self.merge_pull_head_to_test_ref()
 
         elif s == STATE_PENDING:
-            if self.merge_sha == None:
-                c = ("No active merge of candidate %.8s found, likely manual push to %s"
-                     % (self.sha, self.master_ref))
+            if not self.fresh():
+                c = ("Merge sha %.8s is stale."
+                     % (self.merge_sha,))
                 self.log.info(c)
                 self.add_comment(self.sha, c)
                 self.reset_test_ref_to_master()
@@ -546,8 +577,17 @@ class PullReq:
                 self.log.info("%s - no info yet, waiting on tests", self.short())
 
         elif s == STATE_TESTED:
-            self.log.info("%s - tests successful, attempting landing", self.short())
-            self.advance_master_ref_to_test()
+            if self.fresh():
+                self.log.info("%s - tests successful, attempting landing", self.short())
+                # TODO we do not handle the case where master has moved on here, like we did for PENDING
+                self.advance_master_ref_to_test()
+            else:
+                c = ("Merge sha %.8s is stale."
+                     % (self.merge_sha,))
+                self.log.info(c)
+                self.add_comment(self.sha, c)
+                self.reset_test_ref_to_master()
+                self.merge_pull_head_to_test_ref()
 
 
 
@@ -638,30 +678,6 @@ def main():
     # if we get it right.
     #
 
-    test_ref = cfg["test_ref"].encode("utf8")
-    master_ref = cfg["master_ref"].encode("utf8")
-    test_head = gh.repos(owner)(repo).git().refs().heads(test_ref).get()
-    master_head = gh.repos(owner)(repo).git().refs().heads(master_ref).get()
-    test_sha = test_head["object"]["sha"].encode("utf8")
-    master_sha = master_head["object"]["sha"].encode("utf8")
-    test_commit = gh.repos(owner)(repo).git().commits(test_sha).get()
-    test_parents = [ x["sha"].encode("utf8") for x in test_commit["parents"] ]
-    candidate_sha = None
-    if len(test_parents) == 2 and master_sha in test_parents:
-        test_parents.remove(master_sha)
-        candidate_sha = test_parents[0]
-        logging.info("test ref '%s' = %.8s, parents: '%s' = %.8s and candidate = %.8s",
-                     test_ref, test_sha,
-                     master_ref, master_sha,
-                     candidate_sha)
-    for p in pulls:
-        if p.sha == candidate_sha:
-            logging.info("candidate = %.8s found in pull req %s",
-                         candidate_sha, p.short())
-            p.merge_sha = test_sha
-
-
-
     # By now we have found all pull reqs and marked the one that's the
     # currently-building candidate (if it exists). We then sort them
     # by ripeness and pick the one closest to landing, try to push it
@@ -711,14 +727,7 @@ def main():
                      pull.priority(),
                      pull.desc())
 
-    if len(pulls) == 0:
-        logging.info("no pull requests open")
-    else:
-        p = pulls[-1]
-        logging.info("working with most-ripe pull %s", p.short())
-        p.try_advance()
-
-
+    [p.try_advance() for p in reversed(pulls)]
 
 if __name__ == "__main__":
     try:

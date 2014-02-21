@@ -155,7 +155,8 @@ class GitHub(object):
             except urllib2.HTTPError, e:
                 if nretries > 0:
                     nretries -= 1
-                    print "temporary HTTP error, retrying up to %d times..." % nretries
+                    #print "temporary HTTP error, retrying up to %d times..." % nretries
+                    print "temporary HTTP error (%d) %s on %s, retrying up to %d times..." % (e.code, method, path, nretries)
                     continue
                 is_json = self._process_resp(e.headers)
                 json = None
