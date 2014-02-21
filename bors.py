@@ -367,11 +367,11 @@ class PullReq:
     def set_pending(self, txt, url):
         self.set_status("pending", description=txt, target_url=url)
 
-    def set_success(self, txt):
-        self.set_status("success", description=txt)
+    def set_success(self, txt, url):
+        self.set_status("success", description=txt, target_url=url)
 
-    def set_failure(self, txt):
-        self.set_status("failure", description=txt)
+    def set_failure(self, txt, url):
+        self.set_status("failure", description=txt, target_url=url)
 
     def set_error(self, txt):
         self.set_status("error", description=txt)
@@ -530,7 +530,7 @@ class PullReq:
                     c += "\nwarning: " + url
                 c += "\n"
                 self.add_comment(self.sha, c)
-                self.set_success("all tests passed")
+                self.set_success("all tests passed", url)
 
             elif t == False:
                 self.log.info("%s - tests failed, marking failure", self.short())
@@ -541,7 +541,7 @@ class PullReq:
                     c += "\nexception: " + url
                 c += "\n"
                 self.add_comment(self.sha, c)
-                self.set_failure("some tests failed")
+                self.set_failure("some tests failed", url)
 
             else:
                 self.log.info("%s - no info yet, waiting on tests", self.short())
