@@ -225,7 +225,6 @@ class PullReq:
         self.cfg = cfg
         self.log = logging.getLogger("pullreq")
         self.user = cfg["gh_user"].encode("utf8")
-        self.test_ref = cfg["test_ref"].encode("utf8")
         self.master_ref = cfg["master_ref"].encode("utf8")
         self.reviewers = [ r.encode("utf8") for r in cfg["reviewers"] ]
         self.num=j["number"]
@@ -235,6 +234,7 @@ class PullReq:
         self.src_repo=j["head"]["repo"]["name"].encode("utf8")
         self.ref=j["head"]["ref"].encode("utf8")
         self.sha=j["head"]["sha"].encode("utf8")
+        self.test_ref = '%s-borshop-integration' % self.ref
         self.title=ustr(j["title"])
         self.body=ustr(j["body"])
         self.merge_sha = None
@@ -448,8 +448,12 @@ class PullReq:
         master_sha = j["object"]["sha"].encode("utf8")
         self.log.info("resetting %s to %s = %.8s",
                       self.test_ref, self.master_ref, master_sha)
-        self.dst().git().refs().heads(self.test_ref).patch(sha=master_sha,
-                                                           force=True)
+        try:
+            self.dst().git().refs().heads(self.test_ref).patch(sha=master_sha,
+                                                                 force=True)
+        except github.ApiError:
+            self.dst().git().refs().post(sha=master_sha,
+                    ref="refs/heads/"+self.test_ref)
 
     def merge_pull_head_to_test_ref(self):
         s = "merging %s into %s" % (self.short(), self.test_ref)
