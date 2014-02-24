@@ -463,9 +463,9 @@ class PullReq:
         try:
             self.log.info(s)
             self.add_comment(self.sha, s)
-            m = ("auto merge of #%d : %s/%s/%s, r=%s\n\n%s" %
-                 (self.num, self.src_owner, self.src_repo, self.ref,
-                  ",".join(self.approval_list()), self.body))
+            m = ("Merge pull request #%d from %s/%s\n\n%s\n\nReviewed-by: %s" %
+                 (self.num, self.src_owner, self.ref,
+                  self.title, ",".join(self.approval_list())))
             j = self.dst().merges().post(base=self.test_ref,
                                          head=self.sha,
                                          commit_message=m)
