@@ -78,6 +78,7 @@
 #     - if ffwd works, close pull req
 #     - if ffwd fails, set ERROR (someone moved target-branch on us)
 
+import argparse
 import json
 import urllib2
 import sys
@@ -603,11 +604,16 @@ def main():
     fmt = logging.Formatter(fmt='%(asctime)s - %(levelname)s - %(message)s',
                             datefmt="%Y-%m-%d %H:%M:%S %Z")
 
-    if "--quiet" not in sys.argv:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-q", "--quiet", help="Be quiet", action='store_true')
+    parser.add_argument("-r", "--repo", help="Repo to operate on - overrides configured repo")
+    args = parser.parse_args()
+    if not args.quiet:
         sh = logging.StreamHandler()
         sh.setFormatter(fmt)
         sh.setLevel(logging.DEBUG)
         logging.root.addHandler(sh)
+
 
     rfh = logging.handlers.RotatingFileHandler("bors.log",
                                                backupCount=10,
@@ -625,6 +631,11 @@ def main():
         cfg['approval_tokens'] = ['r+', 'r=me']
     if not 'disapproval_tokens' in cfg:
         cfg['disapproval_tokens'] = ['r-']
+
+
+    if args.repo:
+        logging.info("using command line repo %s", args.repo)
+        cfg["repo"] = args.repo
 
     gh = None
     if "gh_pass" in cfg:
