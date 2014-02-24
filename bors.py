@@ -227,6 +227,8 @@ class PullReq:
         self.user = cfg["gh_user"].encode("utf8")
         self.master_ref = cfg["master_ref"].encode("utf8")
         self.reviewers = [ r.encode("utf8") for r in cfg["reviewers"] ]
+        self.approval_tokens = [ r.encode("utf8") for r in cfg["approval_tokens"] ]
+        self.disapproval_tokens = [ r.encode("utf8") for r in cfg["disapproval_tokens"] ]
         self.num=j["number"]
         self.dst_owner=cfg["owner"].encode("utf8")
         self.dst_repo=cfg["repo"].encode("utf8")
@@ -309,8 +311,8 @@ class PullReq:
 
     def approval_list(self):
         return ([u for (d,u,c) in self.head_comments
-                 if (c.startswith("r+") or
-                     c.startswith("r=me"))] +
+                    if any([c.startswith(token) for token in self.approval_tokens])]
+                 +
                 [ m.group(1)
                   for (_,_,c) in self.head_comments
                   for m in [re.match(r"^r=(\w+)", c)] if m ])
@@ -330,7 +332,7 @@ class PullReq:
 
     def disapproval_list(self):
         return [u for (d,u,c) in self.head_comments
-                if c.startswith("r-")]
+                if any([c.startswith(token) for token in self.disapproval_tokens])]
 
     def count_retries(self):
         return len([c for (d,u,c) in self.head_comments if (
@@ -622,6 +624,11 @@ def main():
     logging.info("---------- starting run ----------")
     logging.info("loading bors.cfg")
     cfg = json.load(open("bors.cfg"))
+
+    if not 'approval_tokens' in cfg:
+        cfg['approval_tokens'] = ['r+', 'r=me']
+    if not 'disapproval_tokens' in cfg:
+        cfg['disapproval_tokens'] = ['r-']
 
     gh = None
     if "gh_pass" in cfg:
