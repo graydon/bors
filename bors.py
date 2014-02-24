@@ -32,7 +32,6 @@
 #       "reviewers": ["<user1>", "<user2>", ...],
 #       "builders": ["<buildbot-builder1>", "<buildbot-builder2>", ...],
 #       "test_ref": "<git-ref-for-testing>",
-#       "master_ref": "<git-ref-for-integration>",
 #       "nbuilds": <number-of-buildbot-builds-history-to-look-at>,
 #       "buildbot": "<buildbot-url>",
 #       "gh_user": "<github-user-to-run-as>",
@@ -47,7 +46,6 @@
 #       "reviewers": ["brson", "catamorphism", "graydon", "nikomatsakis", "pcwalton"],
 #       "builders": ["auto-linux", "auto-win", "auto-bsd", "auto-mac"],
 #       "test_ref": "auto",
-#       "master_ref": "incoming",
 #       "nbuilds": 5,
 #       "buildbot": "http://buildbot.rust-lang.org",
 #       "gh_user": "bors",
@@ -67,7 +65,7 @@
 #     if r-, set DISAPPROVED
 #     (if nothing is said, exit; nothing to do!)
 #
-#   - if state==APPROVED, merge pull.sha + master => test_ref:
+#   - if state==APPROVED, merge pull.sha + target-branch => test_ref:
 #     - if merge ok, set PENDING
 #     - if merge fail, set ERROR (pull req bitrotted)
 #
@@ -76,9 +74,9 @@
 #     - if passed, set TESTED
 #     (if no test status, exit; waiting for results)
 #
-#   - if state==TESTED, fast-forward master to test_ref
+#   - if state==TESTED, fast-forward target-branch to test_ref
 #     - if ffwd works, close pull req
-#     - if ffwd fails, set ERROR (someone moved master on us)
+#     - if ffwd fails, set ERROR (someone moved target-branch on us)
 
 import json
 import urllib2
@@ -225,7 +223,7 @@ class PullReq:
         self.cfg = cfg
         self.log = logging.getLogger("pullreq")
         self.user = cfg["gh_user"].encode("utf8")
-        self.master_ref = cfg["master_ref"].encode("utf8")
+        self.target_ref = j["base"]["ref"].encode("utf8")
         self.reviewers = [ r.encode("utf8") for r in cfg["reviewers"] ]
         self.approval_tokens = [ r.encode("utf8") for r in cfg["approval_tokens"] ]
         self.disapproval_tokens = [ r.encode("utf8") for r in cfg["disapproval_tokens"] ]
@@ -352,7 +350,7 @@ class PullReq:
     # {no state}  -- we haven't seen a review yet. wait for r+ or r-
     # {pending} -- we saw r+ and are attempting to build & test
     # {failure} -- we saw a test failure. we post details, ignore.
-    # {success} -- tests passed, time to move master
+    # {success} -- tests passed, time to move target-branch
     # {error} -- tests passed but merging failed (or other error)!
 
     def get_head_statuses(self):
@@ -445,17 +443,17 @@ class PullReq:
 
     # These are more destructive actions that affect the dst repo
 
-    def reset_test_ref_to_master(self):
-        j = self.dst().git().refs().heads(self.master_ref).get()
-        master_sha = j["object"]["sha"].encode("utf8")
+    def reset_test_ref_to_target(self):
+        j = self.dst().git().refs().heads(self.target_ref).get()
+        target_sha = j["object"]["sha"].encode("utf8")
         self.log.info("resetting %s to %s = %.8s",
-                      self.test_ref, self.master_ref, master_sha)
+                      self.test_ref, self.target_ref, target_sha)
         try:
             self.dst().git().refs().heads(self.test_ref).get()
-            self.dst().git().refs().heads(self.test_ref).patch(sha=master_sha,
+            self.dst().git().refs().heads(self.test_ref).patch(sha=target_sha,
                                                                  force=True)
         except github.ApiError:
-            self.dst().git().refs().post(sha=master_sha,
+            self.dst().git().refs().post(sha=target_sha,
                     ref="refs/heads/"+self.test_ref)
 
     def merge_pull_head_to_test_ref(self):
@@ -484,13 +482,13 @@ class PullReq:
             self.add_comment(self.sha, s)
             self.set_error(s)
 
-    def advance_master_ref_to_test(self):
+    def advance_target_ref_to_test(self):
         assert self.merge_sha != None
         s = ("fast-forwarding %s to %s = %.8s" %
-             (self.master_ref, self.test_ref, self.merge_sha))
+             (self.target_ref, self.test_ref, self.merge_sha))
         self.log.info(s)
         try:
-            self.dst().git().refs().heads(self.master_ref).patch(sha=self.merge_sha,
+            self.dst().git().refs().heads(self.target_ref).patch(sha=self.merge_sha,
                                                                  force=False)
             self.add_comment(self.sha, s)
             try:
@@ -519,13 +517,12 @@ class PullReq:
         # feature branch
         owner = self.cfg["owner"].encode("utf8")
         repo = self.cfg["repo"].encode("utf8")
-        master_ref = self.cfg["master_ref"].encode("utf8")
-        master_head = self.gh.repos(owner)(repo).git().refs().heads(master_ref).get()
-        master_sha = master_head["object"]["sha"].encode("utf8")
+        target_head = self.gh.repos(owner)(repo).git().refs().heads(self.target_ref).get()
+        target_sha = target_head["object"]["sha"].encode("utf8")
         test_commit = self.gh.repos(owner)(repo).git().commits(self.merge_sha).get()
         test_parents = [ x["sha"].encode("utf8") for x in test_commit["parents"] ]
         return (len(test_parents) == 2 and
-                master_sha in test_parents and
+                target_sha in test_parents and
                 self.sha in test_parents)
 
     def try_advance(self):
@@ -545,7 +542,7 @@ class PullReq:
                                               self.src_repo,
                                               self.sha))))
 
-            self.reset_test_ref_to_master()
+            self.reset_test_ref_to_target()
             self.merge_pull_head_to_test_ref()
 
         elif s == STATE_PENDING:
@@ -554,7 +551,7 @@ class PullReq:
                      % (self.merge_sha,))
                 self.log.info(c)
                 self.add_comment(self.sha, c)
-                self.reset_test_ref_to_master()
+                self.reset_test_ref_to_target()
                 self.merge_pull_head_to_test_ref()
                 return
             self.log.info("%s - found pending state, checking tests", self.short())
@@ -590,14 +587,13 @@ class PullReq:
         elif s == STATE_TESTED:
             if self.fresh():
                 self.log.info("%s - tests successful, attempting landing", self.short())
-                # TODO we do not handle the case where master has moved on here, like we did for PENDING
-                self.advance_master_ref_to_test()
+                self.advance_target_ref_to_test()
             else:
                 c = ("Merge sha %.8s is stale."
                      % (self.merge_sha,))
                 self.log.info(c)
                 self.add_comment(self.sha, c)
-                self.reset_test_ref_to_master()
+                self.reset_test_ref_to_target()
                 self.merge_pull_head_to_test_ref()
 
 
@@ -677,7 +673,7 @@ def main():
     #                               /     \
     #                              /       \
     #                             /         \
-    #  master_ref ==>  <master_sha>         <candidate_sha> == p.sha
+    #  target_ref ==>  <target_sha>         <candidate_sha> == p.sha
     #                            |           |
     #                            |           |
     #                           ...         ...
@@ -689,9 +685,9 @@ def main():
     # We discover this situation by working backwards:
     #
     #   - We get the test_ref's sha, test_sha
-    #   - We get the master_ref's sha, master_sha
+    #   - We get the target_ref's sha, target_sha
     #   - We get the 2 parent links of test_sha
-    #   - We exclude the master_sha from that parent list
+    #   - We exclude the target_sha from that parent list
     #   - Whatever the _other_ parent is, we consider the candidate
     #
     # If we fail to find any steps along the way, bors will either ignore
