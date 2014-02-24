@@ -635,6 +635,13 @@ def main():
     owner = cfg["owner"].encode("utf8")
     repo = cfg["repo"].encode("utf8")
 
+    if "collaborators_as_reviewers" in cfg and cfg["collaborators_as_reviewers"] == True:
+        # NOTE there is no paging when listing collaborators
+        collabs = gh.repos(owner)(repo).collaborators().get()
+        cfg["reviewers"] = [c["login"] for c in collabs]
+        logging.info("found %d collaborators", len(collabs))
+
+
     more_pulls = True
     all_pulls = []
     page = 1
