@@ -449,6 +449,7 @@ class PullReq:
         self.log.info("resetting %s to %s = %.8s",
                       self.test_ref, self.master_ref, master_sha)
         try:
+            self.dst().git().refs().heads(self.test_ref).get()
             self.dst().git().refs().heads(self.test_ref).patch(sha=master_sha,
                                                                  force=True)
         except github.ApiError:
@@ -495,6 +496,10 @@ class PullReq:
                 self.closed = True
             except github.ApiError:
                 self.log.info("closing failed; auto-closed after merge?")
+            try:
+                self.dst().git().refs().heads(self.test_ref).delete()
+            except github.ApiError:
+                self.log.info("deleting integration branch %s failed" % self.test_ref)
         except github.ApiError:
             s = s + " failed"
             self.log.info(s)
