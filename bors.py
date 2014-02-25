@@ -311,12 +311,26 @@ class PullReq:
             return ("","","")
 
     def approval_list(self):
-        return ([u for (d,u,c) in self.head_comments
+        rec = re.compile(r"^(?:"+"|".join([re.escape(t) for t in self.approval_tokens])+")\s+([a-z0-9]{7,40})")
+        return (
+                # check for approval tokens on the commit comments
+                [u for (d,u,c) in self.head_comments
                     if any([c.startswith(token) for token in self.approval_tokens])]
                  +
+                # check for the r=<user> syntax on the commit comment
                 [ m.group(1)
                   for (_,_,c) in self.head_comments
-                  for m in [re.match(r"^r=(\w+)", c)] if m ])
+                  for m in [re.match(r"^r=(\w+)", c)] if m ]
+                +
+                # check for the approval tokens followed by the branch SHA in the PR comments from reviewers
+                [ u
+                  for (_,u,c) in self.pull_comments
+                  for m in [re.match(rec, c)] if m and u in self.reviewers and self.sha.startswith(m.group(1)) ]
+                +
+                # check for the r=<name> followed by the branch SHA in the PR comments from reviewers
+                [ m.group(1)
+                  for (_,_,c) in self.head_comments
+                  for m in [re.match(r"^r=(\w+) ([a-z0-9]+)", c)] if m and u in self.reviewers and self.sha.startswith(m.group(2)) ])
 
     def priority(self):
         p = 0
@@ -332,8 +346,16 @@ class PullReq:
                 -self.num)
 
     def disapproval_list(self):
-        return [u for (d,u,c) in self.head_comments
-                if any([c.startswith(token) for token in self.disapproval_tokens])]
+        rec = re.compile(r"^(?:"+"|".join([re.escape(t) for t in self.disapproval_tokens])+")\s+([a-z0-9]{7,40})")
+        return (
+                # check for disapproval tokens on the commit comments
+                [u for (d,u,c) in self.head_comments
+                    if any([c.startswith(token) for token in self.disapproval_tokens])]
+                +
+                # check for disapproval tokens followed by the branch SHA in the PR comments from reviewers
+                [ u
+                    for (_,u,c) in self.pull_comments
+                    for m in [re.match(rec, c)] if m and u in self.reviewers and self.sha.startswith(m.group(1)) ])
 
     def count_retries(self):
         return len([c for (d,u,c) in self.head_comments if (
