@@ -293,7 +293,9 @@ class PullReq:
              c["user"]["login"].encode("utf8"),
              ustr(c["body"]))
             for c in cs
-            if c["user"]["login"].encode("utf8") in self.reviewers
+            if c["user"]["login"].encode("utf8") in self.reviewers and
+                # don't allow edited comments because the owner of the fork can edit them
+                c["created_at"] == c["updated_at"]
             ]
 
     def all_comments(self):
