@@ -235,7 +235,7 @@ class PullReq:
         self.src_repo=j["head"]["repo"]["name"].encode("utf8")
         self.ref=j["head"]["ref"].encode("utf8")
         self.sha=j["head"]["sha"].encode("utf8")
-        self.test_ref = '%s-borshop-integration' % self.ref
+        self.test_ref = '%s-%s-integration' % (self.ref, self.user)
         self.title=ustr(j["title"])
         self.body=ustr(j["body"])
         self.merge_sha = None
