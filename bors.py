@@ -414,6 +414,17 @@ class PullReq:
     def count_errors(self):
         return len([c for c in self.statuses if c == "error"])
 
+    def merge_allowed(self):
+        if self.cfg.get('no_auto_merge') == True:
+            # bors is configured to wait for the PR author to approve the merge
+            rec = re.compile(r"^@"+re.escape(self.user)+":{0,1} merge")
+            merges = [ u
+                    for (_,u,c) in self.pull_comments
+                    for m in [re.match(rec, c)] if m and u in self.reviewers ]
+            return len(merges) > 0
+        return True
+
+
     def get_merge_sha(self):
         # Find the newest 'pending' status and parse the SHA out of that
         ss = self.dst().statuses(self.sha).get()
@@ -605,6 +616,10 @@ class PullReq:
                 self.log.info("%s - no info yet, waiting on tests", self.short())
 
         elif s == STATE_TESTED:
+            if not self.merge_allowed():
+                self.log.info("%s - tests successful, waiting for merge approval",
+                        self.short())
+                return
             if self.fresh():
                 self.log.info("%s - tests successful, attempting landing", self.short())
                 self.advance_target_ref_to_test()
