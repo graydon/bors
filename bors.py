@@ -517,11 +517,6 @@ class PullReq:
                                                                  force=False)
             self.add_comment(self.sha, s)
             try:
-                self.dst().pulls(self.num).patch(state="closed")
-                self.closed = True
-            except github.ApiError:
-                self.log.info("closing failed; auto-closed after merge?")
-            try:
                 self.dst().git().refs().heads(self.test_ref).delete()
             except github.ApiError:
                 self.log.info("deleting integration branch %s failed" % self.test_ref)
