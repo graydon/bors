@@ -781,6 +781,11 @@ def main():
                      pull.priority(),
                      pull.desc())
 
+    max_pulls_per_run = cfg.get('max_pulls_per_run')
+    if max_pulls_per_run:
+        logging.info("Only considering %d pull-requests this run", max_pulls_per_run)
+        pulls = pulls[-max_pulls_per_run:]
+
     [p.try_advance() for p in reversed(pulls)]
 
 if __name__ == "__main__":
