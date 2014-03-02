@@ -235,7 +235,12 @@ class PullReq:
         self.src_repo=j["head"]["repo"]["name"].encode("utf8")
         self.ref=j["head"]["ref"].encode("utf8")
         self.sha=j["head"]["sha"].encode("utf8")
-        self.test_ref = '%s-integration-%s-%s' % (self.user, self.num, self.ref)
+
+        if cfg["test_ref"]:
+            self.test_ref = cfg["test_ref"]
+        else:
+            self.test_ref = '%s-integration-%s-%s' % (self.user, self.num, self.ref)
+
         self.title=ustr(j["title"])
         self.body=ustr(j["body"])
         self.merge_sha = None
