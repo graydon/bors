@@ -235,7 +235,12 @@ class PullReq:
         self.src_repo=j["head"]["repo"]["name"].encode("utf8")
         self.ref=j["head"]["ref"].encode("utf8")
         self.sha=j["head"]["sha"].encode("utf8")
-        self.test_ref = '%s-%s-integration' % (self.ref, self.user)
+
+        if cfg["test_ref"]:
+            self.test_ref = cfg["test_ref"]
+        else:
+            self.test_ref = '%s-integration-%s-%s' % (self.user, self.num, self.ref)
+
         self.title=ustr(j["title"])
         self.body=ustr(j["body"])
         self.merge_sha = None
@@ -577,6 +582,13 @@ class PullReq:
             self.merge_pull_head_to_test_ref()
 
         elif s == STATE_PENDING:
+            # Make sure the optional merge sha is loaded
+            owner = self.cfg["owner"].encode("utf8")
+            repo = self.cfg["repo"].encode("utf8")
+            test_head = self.gh.repos(owner)(repo).git().refs().heads(self.test_ref).get()
+            test_sha = test_head["object"]["sha"].encode("utf8")
+            self.merge_sha = test_sha
+
             if not self.fresh():
                 c = ("Merge sha %.8s is stale."
                      % (self.merge_sha,))
