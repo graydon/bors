@@ -152,17 +152,22 @@ class GitHub(object):
                 is_json = self._process_resp(response.headers)
                 if is_json:
                     return _parse_json(response.read())
+                if response.code == 204:
+                    return None
             except urllib2.HTTPError, e:
-                if nretries > 0:
-                    nretries -= 1
-                    print "temporary HTTP error, retrying up to %d times..." % nretries
-                    continue
                 is_json = self._process_resp(e.headers)
                 json = None
                 if is_json:
                     json = _parse_json(e.read())
                 req = JsonObject(method=method, url=url)
                 resp = JsonObject(code=e.code, json=json)
+                if e.code == 404:
+                    raise ApiError(url, req, resp)
+                if nretries > 0:
+                    nretries -= 1
+                    #print "temporary HTTP error, retrying up to %d times..." % nretries
+                    print "temporary HTTP error (%d) %s on %s with body %s, retrying up to %d times..." % (e.code, method, path, data, nretries)
+                    continue
                 if resp.code==404:
                     raise ApiNotFoundError(url, req, resp)
                 raise ApiError(url, req, resp)
