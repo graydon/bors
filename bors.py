@@ -582,6 +582,13 @@ class PullReq:
             self.merge_pull_head_to_test_ref()
 
         elif s == STATE_PENDING:
+            # Make sure the optional merge sha is loaded
+            owner = self.cfg["owner"].encode("utf8")
+            repo = self.cfg["repo"].encode("utf8")
+            test_head = self.gh.repos(owner)(repo).git().refs().heads(self.test_ref).get()
+            test_sha = test_head["object"]["sha"].encode("utf8")
+            self.merge_sha = test_sha
+
             if not self.fresh():
                 c = ("Merge sha %.8s is stale."
                      % (self.merge_sha,))
