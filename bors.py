@@ -769,6 +769,12 @@ def main():
     logging.info("got %d open pull reqs", len(pulls))
 
     # Dump state-of-world javascript fragment
+
+    try:
+        json_db = json.load(open('bors-status.json', 'r'))
+    except IOError:
+        json_db = {}
+
     j = []
     for pull in pulls:
         j.append({ "num": pull.num,
@@ -784,11 +790,15 @@ def main():
                    "ref": pull.ref,
                    "sha": pull.sha,
                    "state": state_name(pull.current_state()) })
+
+    json_db[repo] = j
+    json.dump(json_db, open('bors-status.json', 'w'))
+
     f = open("bors-status.js", "w")
     f.write(strftime('var updated = new Date("%Y-%m-%dT%H:%M:%SZ");\n',
                      gmtime()))
     f.write("var bors = ")
-    json.dump(j, f)
+    json.dump(json_db, f)
     f.write(";\n")
     f.close()
 
