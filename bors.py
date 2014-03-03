@@ -236,7 +236,7 @@ class PullReq:
         self.ref=j["head"]["ref"].encode("utf8")
         self.sha=j["head"]["sha"].encode("utf8")
 
-        if cfg["test_ref"]:
+        if cfg.get("test_ref"):
             self.test_ref = cfg["test_ref"]
         else:
             self.test_ref = '%s-integration-%s-%s' % (self.user, self.num, self.ref)
