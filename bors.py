@@ -783,6 +783,8 @@ def main():
                    "prio": pull.priority(),
                    "src_owner": pull.src_owner,
                    "src_repo": pull.src_repo,
+                   "dst_owner": pull.dst_owner,
+                   "dst_repo": pull.dst_repo,
                    "num_comments": len(pull.head_comments +
                                        pull.pull_comments),
                    "last_comment": pull.last_comment(),

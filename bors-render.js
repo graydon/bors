@@ -19,7 +19,7 @@ function render_queue(queue) {
 
         var num = e["num"].toString();
         var num_cell = elt("td");
-        var repo = e["src_owner"] + "/" + e["src_repo"] + "/"
+        var repo = e["dst_owner"] + "/" + e["dst_repo"] + "/"
             num_cell.appendChild(a_txt_class_url(num, "pull", "https://github.com/" + repo + "pull/" + num));
         row.appendChild(num_cell);
 
