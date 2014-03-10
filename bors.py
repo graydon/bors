@@ -599,8 +599,29 @@ class PullReq:
                 return
             self.log.info("%s - found pending state, checking tests", self.short())
             assert self.merge_sha != None
-            bb = BuildBot(self.cfg)
-            (t, main_urls, extra_urls) = bb.test_status(self.merge_sha)
+            if self.cfg.get("use_github_commit_status_api"):
+                statuses = self.dst().statuses(self.merge_sha).get()
+                self.log.info("found %d commit status for commit: %s" % (len(statuses), self.merge_sha))
+                pending = [s for s in statuses if s["state"].encode("utf8") == "pending"]
+                successes = [s for s in statuses if s["state"].encode("utf8") == "success"]
+                failures = [s for s in statuses if s["state"].encode("utf8") == "failure"]
+                errors = [s for s in statuses if s["state"].encode("utf8") == "error"]
+                self.log.info("%d pending %d sucesses %d failure %d error" % (len(pending), len(successes), len(failures), len(errors)))
+                if len(statuses) == 0 or len(pending) > len(successes) + len(failures) + len(errors):
+                    t = None
+                    main_urls = []
+                    extra_urls = []
+                elif len(pending) == len(successes):
+                    t = True
+                    main_urls = [s["target_url"].encode("utf8") for s in successes]
+                    extra_urls = []
+                else:
+                    t = False
+                    main_urls = [s["target_url"].encode("utf8") for s in failures]
+                    extra_urls = [s["target_url"].encode("utf8") for s in errors]
+            else:
+                bb = BuildBot(self.cfg)
+                (t, main_urls, extra_urls) = bb.test_status(self.merge_sha)
 
             if t == True:
                 self.log.info("%s - tests passed, marking success", self.short())
