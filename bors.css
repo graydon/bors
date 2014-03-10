@@ -11,7 +11,7 @@ body {
 }
 
 #queue {
-    margin: em;
+    margin: 0em auto;
     border: 1px black solid;
 }
 
