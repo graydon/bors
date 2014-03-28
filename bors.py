@@ -429,6 +429,20 @@ class PullReq:
             return len(merges) > 0
         return True
 
+    def maybe_delete_source_branch(self):
+        """
+        If the `delete_source_branch` config option is set to True,
+        this will delete the branch that is the source of this pull-request.
+        The default config value is False. If the user running bors doesn't
+        have contributor power over the repository the pull-request originated,
+        it will not be able to delete the branch.
+        """
+        if self.cfg.get('delete_source_branch') == True:
+            # Try to clean up the feature branch (the source of this PR)
+            try:
+                self.dst().git().refs().heads(self.ref).delete()
+            except github.ApiError:
+                self.log.info("deleting source branch %s failed" % self.test_ref)
 
     def get_merge_sha(self):
         # Find the newest 'pending' status and parse the SHA out of that
@@ -532,10 +546,15 @@ class PullReq:
             self.dst().git().refs().heads(self.target_ref).patch(sha=self.merge_sha,
                                                                  force=False)
             self.add_comment(self.sha, s)
+
+            # Try to clean up the temporary integration branch
             try:
                 self.dst().git().refs().heads(self.test_ref).delete()
             except github.ApiError:
                 self.log.info("deleting integration branch %s failed" % self.test_ref)
+
+            self.maybe_delete_source_branch()
+
         except github.ApiError:
             s = s + " failed"
             self.log.info(s)
