@@ -741,21 +741,10 @@ def main():
         cfg["reviewers"] = [c["login"] for c in collabs]
         logging.info("found %d collaborators", len(collabs))
 
-
-    more_pulls = True
-    all_pulls = []
-    page = 1
-    while more_pulls:
-        logging.info("loading pull reqs (page %d)", page)
-        pulls = gh.repos(owner)(repo).pulls().get(per_page=100,
-                                                  page=page)
-        all_pulls.extend(pulls)
-        if len(pulls) == 0:
-            more_pulls = False
-        page += 1
+    pulls = gh.repos(owner)(repo).pulls().get()
 
     pulls = [ PullReq(cfg, gh, pull) for pull in
-              all_pulls ]
+              pulls ]
 
     #
     # We are reconstructing the relationship between three tree-states on the
