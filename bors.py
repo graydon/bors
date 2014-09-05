@@ -726,10 +726,12 @@ def main():
     gh = None
     if "gh_pass" in cfg:
         gh = github.GitHub(username=cfg["gh_user"].encode("utf8"),
-                           password=cfg["gh_pass"].encode("utf8"))
+                           password=cfg["gh_pass"].encode("utf8"),
+                           api_url=cfg.get("gh_api"))
     else:
         gh = github.GitHub(username=cfg["gh_user"].encode("utf8"),
-                           access_token=cfg["gh_token"].encode("utf8"))
+                           access_token=cfg["gh_token"].encode("utf8"),
+                           api_url=cfg.get("gh_api"))
 
 
     owner = cfg["owner"].encode("utf8")
@@ -857,4 +859,3 @@ if __name__ == "__main__":
     except github.ApiError as e:
         print("Github API exception: " + str(e.response))
         exit(-1)
-

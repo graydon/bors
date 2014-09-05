@@ -55,7 +55,6 @@ from datetime import datetime, timedelta, tzinfo
 from StringIO import StringIO
 TIMEOUT=60
 
-_URL = 'https://api.github.com'
 _METHOD_MAP = dict(
         GET=lambda: 'GET',
         PUT=lambda: 'PUT',
@@ -72,7 +71,11 @@ class GitHub(object):
     GitHub client.
     '''
 
-    def __init__(self, username=None, password=None, access_token=None, client_id=None, client_secret=None, redirect_uri=None, scope=None):
+    def __init__(self, username=None, password=None, access_token=None, client_id=None, client_secret=None, redirect_uri=None, scope=None, api_url=None):
+        if api_url is not None:
+            self._URL = api_url
+        else:
+            self._URL = 'https://api.github.com'
         self.x_ratelimit_remaining = (-1)
         self.x_ratelimit_limit = (-1)
         self._authorization = None
@@ -138,7 +141,7 @@ class GitHub(object):
             path = '%s?%s' % (path, _encode_params(kw))
         if method in ['POST', 'PATCH', 'PUT']:
             data = _encode_json(kw)
-        url = '%s%s' % (_URL, path)
+        url = '%s%s' % (self._URL, path)
         opener = urllib2.build_opener(urllib2.HTTPSHandler)
         request = urllib2.Request(url, data=data)
         request.get_method = _METHOD_MAP[method]
