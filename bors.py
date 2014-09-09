@@ -626,11 +626,11 @@ class PullReq:
                 failures = [s for s in statuses if s["state"].encode("utf8") == "failure"]
                 errors = [s for s in statuses if s["state"].encode("utf8") == "error"]
                 self.log.info("%d pending %d sucesses %d failure %d error" % (len(pending), len(successes), len(failures), len(errors)))
-                if len(statuses) == 0 or len(pending) > len(successes) + len(failures) + len(errors):
+                if len(statuses) == 0 or (len(successes) + len(failures) + len(errors)) == 0:
                     t = None
                     main_urls = []
                     extra_urls = []
-                elif len(pending) == len(successes):
+                elif len(successes) > 0 and (len(failures) + len(errors)) == 0:
                     t = True
                     main_urls = [s["target_url"].encode("utf8") for s in successes]
                     extra_urls = []
