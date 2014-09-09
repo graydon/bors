@@ -105,7 +105,7 @@ function render_status() {
         }
     } else {
         // render the first one
-        render_queue(bors[keys[0]]);
+        render_queue(bors[k[0]]);
     }
 }
 
