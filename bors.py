@@ -229,6 +229,7 @@ class PullReq:
         self.approval_tokens = [ r.encode("utf8") for r in cfg["approval_tokens"] ]
         self.disapproval_tokens = [ r.encode("utf8") for r in cfg["disapproval_tokens"] ]
         self.num=j["number"]
+        self.gh_host=cfg.get("gh_host", "github.com")
         self.dst_owner=cfg["owner"].encode("utf8")
         self.dst_repo=cfg["repo"].encode("utf8")
         self.src_owner=j["head"]["repo"]["owner"]["login"].encode("utf8")
@@ -269,8 +270,8 @@ class PullReq:
                 (self.src_owner, self.src_repo, self.ref, self.sha))
 
     def desc(self):
-        return ("pull https://github.com/%s/%s/pull/%d - %s - '%.30s'" %
-                (self.dst_owner, self.dst_repo,
+        return ("pull https://%s/%s/%s/pull/%d - %s - '%.30s'" %
+                (self.gh_host, self.dst_owner, self.dst_repo,
                  self.num, self.short(), self.title))
 
     def src(self):
@@ -523,8 +524,8 @@ class PullReq:
                                          head=self.sha,
                                          commit_message=m)
             self.merge_sha = j["sha"].encode("utf8")
-            u = ("https://github.com/%s/%s/commit/%s" %
-                 (self.dst_owner, self.dst_repo, self.merge_sha))
+            u = ("https://%s/%s/%s/commit/%s" %
+                 (self.gh_host, self.dst_owner, self.dst_repo, self.merge_sha))
             s = "%s merged ok, testing candidate = %.8s" % (self.short(),
                                                             self.merge_sha)
             self.log.info(s)
@@ -592,8 +593,9 @@ class PullReq:
             self.log.info("%s - found approval, advancing to test", self.short())
             self.add_comment(self.sha, ("saw approval from "
                                         + ", ".join(self.approval_list())
-                                        + ("\nat https://github.com/%s/%s/commit/%s" %
-                                             (self.src_owner,
+                                        + ("\nat https://%s/%s/%s/commit/%s" %
+                                             (self.gh_host,
+                                              self.src_owner,
                                               self.src_repo,
                                               self.sha))))
 
@@ -726,10 +728,12 @@ def main():
     gh = None
     if "gh_pass" in cfg:
         gh = github.GitHub(username=cfg["gh_user"].encode("utf8"),
-                           password=cfg["gh_pass"].encode("utf8"))
+                           password=cfg["gh_pass"].encode("utf8"),
+                           api_url=cfg.get("gh_api"))
     else:
         gh = github.GitHub(username=cfg["gh_user"].encode("utf8"),
-                           access_token=cfg["gh_token"].encode("utf8"))
+                           access_token=cfg["gh_token"].encode("utf8"),
+                           api_url=cfg.get("gh_api"))
 
 
     owner = cfg["owner"].encode("utf8")
@@ -857,4 +861,3 @@ if __name__ == "__main__":
     except github.ApiError as e:
         print("Github API exception: " + str(e.response))
         exit(-1)
-
