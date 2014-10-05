@@ -228,6 +228,7 @@ class PullReq:
         self.reviewers = [ r.encode("utf8") for r in cfg["reviewers"] ]
         self.approval_tokens = [ r.encode("utf8") for r in cfg["approval_tokens"] ]
         self.disapproval_tokens = [ r.encode("utf8") for r in cfg["disapproval_tokens"] ]
+        self.ignored_users_in_comments = [ r.encode("utf8") for r in cfg.get("ignored_users_in_comments", []) ]
         self.num=j["number"]
         self.gh_host=cfg.get("gh_host", "github.com")
         self.dst_owner=cfg["owner"].encode("utf8")
@@ -307,6 +308,7 @@ class PullReq:
     def all_comments(self):
         a = self.head_comments + self.pull_comments
         a = sorted(a, key=lambda c: c[0])
+        a = filter(lambda c: c[1] not in self.ignored_users_in_comments, a)
         return a
 
     def last_comment(self):
