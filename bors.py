@@ -81,7 +81,6 @@
 import argparse
 import json
 import urllib2
-import sys
 import re
 import logging, logging.handlers
 import github
