@@ -136,11 +136,11 @@ class BuildBot:
         self.log.info("loading build/test status from buildbot")
         for builder in self.builders:
             for (rev, b) in self.rev_build_pairs(builder):
-                if not (rev in self.revs):
+                if rev not in self.revs:
                     self.revs[rev] = {}
 
                 if "results" in b and (not build_has_status(b, BUILDBOT_STATUS_RETRY)):
-                    if not (builder in self.revs[rev]):
+                    if builder not in self.revs[rev]:
                         self.revs[rev][builder] = b
 
     def rev_build_pairs(self, builder):
