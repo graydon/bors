@@ -82,7 +82,8 @@ import argparse
 import json
 import urllib2
 import re
-import logging, logging.handlers
+import logging
+import logging.handlers
 import github
 from time import strftime, gmtime
 
