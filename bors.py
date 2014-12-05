@@ -715,9 +715,9 @@ def main():
     logging.info("loading bors.cfg")
     cfg = json.load(open("bors.cfg"))
 
-    if not 'approval_tokens' in cfg:
+    if 'approval_tokens' not in cfg:
         cfg['approval_tokens'] = ['r+', 'r=me']
-    if not 'disapproval_tokens' in cfg:
+    if 'disapproval_tokens' not in cfg:
         cfg['disapproval_tokens'] = ['r-']
 
 
