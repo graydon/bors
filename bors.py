@@ -214,7 +214,7 @@ class BuildBot:
             return (None, [], [])
 
 def ustr(s):
-    if s == None:
+    if s is None:
         return ""
     else:
         return s.encode("utf8")
@@ -342,7 +342,7 @@ class PullReq:
         p = 0
         for (d, u, c) in self.head_comments:
             m = re.search(r"\bp=(-?\d+)\b", c)
-            if m != None:
+            if m is not None:
                 p = max(p, int(m.group(1)))
         return p
 
@@ -421,7 +421,7 @@ class PullReq:
         return len([c for c in self.statuses if c == "error"])
 
     def merge_allowed(self):
-        if self.cfg.get('no_auto_merge') == True:
+        if self.cfg.get('no_auto_merge') is True:
             # bors is configured to wait for the PR author to approve the merge
             rec = re.compile(r"^@"+re.escape(self.user)+":{0,1} merge")
             merges = [ u
@@ -438,7 +438,7 @@ class PullReq:
         have contributor power over the repository the pull-request originated,
         it will not be able to delete the branch.
         """
-        if self.cfg.get('delete_source_branch') == True:
+        if self.cfg.get('delete_source_branch') is True:
             # Try to clean up the feature branch (the source of this PR)
             try:
                 self.dst().git().refs().heads(self.ref).delete()
@@ -473,7 +473,7 @@ class PullReq:
         if self.count_successes() != 0:
             return STATE_TESTED
 
-        if self.mergeable == False:
+        if self.mergeable is False:
             return STATE_STALE
 
         if len(self.approval_list()) != 0:
@@ -644,7 +644,7 @@ class PullReq:
                 bb = BuildBot(self.cfg)
                 (t, main_urls, extra_urls) = bb.test_status(self.merge_sha)
 
-            if t == True:
+            if t is True:
                 self.log.info("%s - tests passed, marking success", self.short())
                 c = "all tests pass:"
                 for url in main_urls:
@@ -655,7 +655,7 @@ class PullReq:
                 self.add_comment(self.sha, c)
                 self.set_success("all tests passed", url)
 
-            elif t == False:
+            elif t is False:
                 self.log.info("%s - tests failed, marking failure", self.short())
                 c = "some tests failed:"
                 for url in main_urls:
@@ -739,7 +739,7 @@ def main():
     owner = cfg["owner"].encode("utf8")
     repo = cfg["repo"].encode("utf8")
 
-    if "collaborators_as_reviewers" in cfg and cfg["collaborators_as_reviewers"] == True:
+    if "collaborators_as_reviewers" in cfg and cfg["collaborators_as_reviewers"] is True:
         # NOTE there is no paging when listing collaborators
         collabs = gh.repos(owner)(repo).collaborators().get()
         cfg["reviewers"] = [c["login"] for c in collabs]
