@@ -158,7 +158,7 @@ class BuildBot:
             for props in b["properties"]:
                 if props[0] == "got_revision" and props[2] in ("Source", "Git", "SetProperty Step"):
                     rev = props[1].encode("utf8")
-            if rev != None:
+            if rev is not None:
                 yield (rev, b)
 
     # returns a pair: a tri-state (False=failure, True=pass, None=waiting)
@@ -539,7 +539,7 @@ class PullReq:
             self.set_error(s)
 
     def advance_target_ref_to_test(self):
-        assert self.merge_sha != None
+        assert self.merge_sha is not None
         s = ("fast-forwarding %s to %s = %.8s" %
              (self.target_ref, self.test_ref, self.merge_sha))
         self.log.info(s)
@@ -619,7 +619,7 @@ class PullReq:
                 self.merge_pull_head_to_test_ref()
                 return
             self.log.info("%s - found pending state, checking tests", self.short())
-            assert self.merge_sha != None
+            assert self.merge_sha is not None
             if self.cfg.get("use_github_commit_status_api"):
                 statuses = self.dst().statuses(self.merge_sha).get()
                 self.log.info("found %d commit status for commit: %s" % (len(statuses), self.merge_sha))
