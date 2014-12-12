@@ -338,7 +338,7 @@ class PullReq:
                 # check for the r=<name> followed by the branch SHA in the PR comments from reviewers
                 [ m.group(1)
                   for (_,_,c) in self.head_comments
-                  for m in [re.match(r"^r=([a-zA-Z0-9_-]+) ([a-z0-9]+)", c)] if m and u in self.reviewers and self.sha.startswith(m.group(2)) ])
+                  for m in [re.match(r"^r=([a-zA-Z0-9_-]+) ([a-z0-9]+)", c)] if m and self.sha.startswith(m.group(2)) ])
 
     def priority(self):
         p = 0
