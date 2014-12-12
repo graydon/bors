@@ -227,7 +227,7 @@ class PullReq:
         self.user = cfg["gh_user"].encode("utf8")
         self.test_ref = cfg["test_ref"].encode("utf8")
         self.master_ref = cfg["master_ref"].encode("utf8")
-        self.batch_ref = 'batch'
+        self.batch_ref = cfg.get('batch', 'batch')
         self.reviewers = [ r.encode("utf8") for r in cfg["reviewers"] ]
         self.num=j["number"]
         self.dst_owner=cfg["owner"].encode("utf8")
@@ -322,9 +322,7 @@ class PullReq:
         return False
 
     def priority(self):
-        p = 0
-
-        if self.batched(): p = -1
+        p = -1 if self.batched() else 0
 
         for (d, u, c) in self.head_comments:
             m = re.search(r"\bp=(-?\d+)\b", c)
