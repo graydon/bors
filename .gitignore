@@ -1,3 +1,5 @@
-bors.cfg
-bors.log
-bors-status.js
+/bors.cfg
+/bors.log
+/bors-status.js
+/bors-status.json
+*.pyc
