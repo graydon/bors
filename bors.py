@@ -503,6 +503,7 @@ class PullReq:
 
         successes = []
         failures = []
+        rollup_pulls = []
 
         batch_sha = ''
 
@@ -524,6 +525,7 @@ class PullReq:
                 failures.append(pull_repr)
             else:
                 successes.append(pull_repr)
+                rollup_pulls.append([pull.num, pull.sha])
 
         if batch_sha:
             try:
@@ -546,7 +548,7 @@ class PullReq:
             self.add_comment(self.sha, msg)
             self.set_pending('{}\n{}'.format(
                 short_msg,
-                json.dumps({'merge_sha': batch_sha}),
+                json.dumps({'merge_sha': batch_sha, 'rollup_pulls': rollup_pulls}),
             ), url)
         else:
             batch_msg += ' failed'
@@ -562,7 +564,22 @@ class PullReq:
         else:
             self.merge_pull_head_to_test_ref()
 
-    def advance_master_ref_to_test(self):
+    def advance_master_ref_to_test(self, pulls):
+        if self.batched():
+            num2sha = {x.num: x.sha for x in pulls}
+
+            error_occurred = False
+
+            for num, sha in self.metadata['rollup_pulls']:
+                if num2sha[num] != sha:
+                    error_occurred = True
+
+                    msg = '#{} advanced, cannot continue'.format(num)
+                    self.add_comment(self.sha, msg)
+                    self.set_error(msg)
+
+            if error_occurred: return
+
         s = ("fast-forwarding %s to %s = %.8s" %
              (self.master_ref, self.test_ref, self.metadata['merge_sha']))
         self.log.info(s)
@@ -636,7 +653,7 @@ class PullReq:
 
         elif s == STATE_TESTED:
             self.log.info("%s - tests successful, attempting landing", self.short())
-            self.advance_master_ref_to_test()
+            self.advance_master_ref_to_test(pulls)
 
 
 
