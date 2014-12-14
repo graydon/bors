@@ -486,8 +486,10 @@ class PullReq:
             self.set_error(s)
 
     def merge_batched_pull_reqs_to_test_ref(self, pulls):
+        batched_pulls = [x for x in pulls if x.batched() and x.current_state() == STATE_APPROVED]
+
         batch_msg = 'merging {} batched pull requests into {}'.format(
-            len([x for x in pulls if x.current_state() == STATE_APPROVED]),
+            len(batched_pulls),
             self.batch_ref,
         )
         self.log.info(batch_msg)
@@ -506,25 +508,24 @@ class PullReq:
 
         batch_sha = ''
 
-        for pull in pulls:
-            if pull.current_state() == STATE_APPROVED:
-                self.log.info('merging {} into {}'.format(pull.short(), self.batch_ref))
+        for pull in batched_pulls:
+            self.log.info('merging {} into {}'.format(pull.short(), self.batch_ref))
 
-                msg = 'Merge pull request #{} from {}/{}\n\n{}\n\nReviewed-by: {}'.format(
-                    pull.num,
-                    pull.src_owner, pull.ref,
-                    pull.title,
-                    ', '.join(pull.approval_list())
-                )
-                pull_repr = '- {}/{} = {}: {}'.format(pull.src_owner, pull.ref, pull.sha, pull.title)
+            msg = 'Merge pull request #{} from {}/{}\n\n{}\n\nReviewed-by: {}'.format(
+                pull.num,
+                pull.src_owner, pull.ref,
+                pull.title,
+                ', '.join(pull.approval_list())
+            )
+            pull_repr = '- {}/{} = {}: {}'.format(pull.src_owner, pull.ref, pull.sha, pull.title)
 
-                try:
-                    info = self.dst().merges().post(base=self.batch_ref, head=pull.sha, commit_message=msg)
-                    batch_sha = info['sha'].encode('utf-8')
-                except github.ApiError:
-                    failures.append(pull_repr)
-                else:
-                    successes.append(pull_repr)
+            try:
+                info = self.dst().merges().post(base=self.batch_ref, head=pull.sha, commit_message=msg)
+                batch_sha = info['sha'].encode('utf-8')
+            except github.ApiError:
+                failures.append(pull_repr)
+            else:
+                successes.append(pull_repr)
 
         if batch_sha:
             try:
