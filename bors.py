@@ -387,7 +387,7 @@ class PullReq:
         return len([c for c in self.statuses if c == "failure"])
 
     def count_successes(self):
-        return len([c for c in self.statuses if c == "success"])
+        return 1 if self.statuses and self.statuses[0] == 'success' else 0
 
     def count_pendings(self):
         return len([c for c in self.statuses if c == "pending"])
