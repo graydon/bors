@@ -255,7 +255,6 @@ class PullReq:
         self.get_head_statuses()
         self.get_mergeable()
         self.loaded_ok = True
-        self.metadata = self.parse_metadata()
 
 
     def short(self):
@@ -446,13 +445,16 @@ class PullReq:
                                                            force=True)
 
     def parse_metadata(self):
-        for s in self.dst().statuses(self.sha).get():
-            if s['creator']['login'].encode('utf-8') == self.user and s['state'].encode('utf-8') == 'pending':
-                lines = s['description'].encode('utf-8').split('\n', 1)
-                if len(lines) > 1:
-                    return json.loads(lines[1])
-                else:
-                    return {}
+        cs = self.dst().commits(self.sha).comments().get()
+        status_comments = [
+            c['body'][len(u'status: '):].encode('utf-8')
+            for c in cs
+            if c['user']['login'].encode('utf-8') == self.user and c['body'] and c['body'].startswith(u'status: ')
+        ]
+        self.metadata = json.loads(status_comments[-1]) if status_comments else {}
+
+    def set_metadata(self, **kwargs):
+        self.add_comment(self.sha, 'status: {}'.format(json.dumps(kwargs)))
 
     def merge_pull_head_to_test_ref(self):
         s = "merging %s into %s" % (self.short(), self.test_ref)
@@ -471,11 +473,9 @@ class PullReq:
             s = "%s merged ok, testing candidate = %.8s" % (self.short(),
                                                             merge_sha)
             self.log.info(s)
+            self.set_metadata(merge_sha=merge_sha)
+            self.set_pending("running tests for candidate {:.7}".format(merge_sha), u)
             self.add_comment(self.sha, s)
-            self.set_pending("running tests for candidate {:.7}\n{}".format(
-                merge_sha,
-                json.dumps({'merge_sha': merge_sha}),
-            ), u)
 
         except github.ApiError:
             s = s + " failed"
@@ -545,11 +545,9 @@ class PullReq:
             if failures: msg += '\n\n**Failed merges:**\n\n{}'.format('\n'.join(failures))
 
             self.log.info(short_msg)
+            self.set_metadata(merge_sha=batch_sha, rollup_pulls=rollup_pulls)
+            self.set_pending(short_msg, url)
             self.add_comment(self.sha, msg)
-            self.set_pending('{}\n{}'.format(
-                short_msg,
-                json.dumps({'merge_sha': batch_sha, 'rollup_pulls': rollup_pulls}),
-            ), url)
         else:
             batch_msg += ' failed'
 
@@ -622,6 +620,7 @@ class PullReq:
             self.merge_or_batch(pulls)
 
         elif s == STATE_PENDING:
+            self.parse_metadata()
             self.log.info("%s - found pending state, checking tests", self.short())
             bb = BuildBot(self.cfg)
             (t, main_urls, extra_urls) = bb.test_status(self.metadata['merge_sha'])
@@ -652,6 +651,7 @@ class PullReq:
                 self.log.info("%s - no info yet, waiting on tests", self.short())
 
         elif s == STATE_TESTED:
+            self.parse_metadata()
             self.log.info("%s - tests successful, attempting landing", self.short())
             self.advance_master_ref_to_test(pulls)
 
