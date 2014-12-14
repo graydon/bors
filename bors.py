@@ -566,17 +566,19 @@ class PullReq:
         if self.batched():
             num2sha = {x.num: x.sha for x in pulls}
 
-            error_occurred = False
-
+            advanced = False
             for num, sha in self.metadata['rollup_pulls']:
                 if num2sha[num] != sha:
-                    error_occurred = True
+                    advanced = True
 
-                    msg = '#{} advanced, cannot continue'.format(num)
+                    msg = '#{} advanced, testing again without the PR'.format(num)
+                    self.log.info(msg)
                     self.add_comment(self.sha, msg)
-                    self.set_error(msg)
 
-            if error_occurred: return
+            if advanced:
+                self.statuses = [x for x in self.statuses if x not in ['success', 'pending']] # Mark this PR as unsuccessful
+                self.merge_or_batch(pulls)
+                return
 
         s = ("fast-forwarding %s to %s = %.8s" %
              (self.master_ref, self.test_ref, self.metadata['merge_sha']))
