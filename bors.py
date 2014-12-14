@@ -516,7 +516,7 @@ class PullReq:
                 pull.title,
                 ', '.join(pull.approval_list())
             )
-            pull_repr = '- {}/{} = {}: {}'.format(pull.src_owner, pull.ref, pull.sha, pull.title)
+            pull_repr = '- #{} {} ({}/{} = {})'.format(pull.num, pull.title, pull.src_owner, pull.ref, pull.sha)
 
             try:
                 info = self.dst().merges().post(base=self.batch_ref, head=pull.sha, commit_message=msg)
