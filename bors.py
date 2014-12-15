@@ -238,7 +238,6 @@ class PullReq:
         self.sha=j["head"]["sha"].encode("utf8")
         self.title=ustr(j["title"])
         self.body=ustr(j["body"])
-        self.merge_sha = None
         self.closed=j["state"].encode("utf8") == "closed"
         self.approved = False
         self.testpass = False
@@ -309,11 +308,11 @@ class PullReq:
 
     def approval_list(self):
         return ([u for (d,u,c) in self.head_comments
-                 if (c.startswith("r+") or
-                     c.startswith("r=me"))] +
+                 # Check if "r+" or "r=me"
+                 for m in [re.search(r'\b(?:r\+|r=me\b)', c)] if m] +
                 [ m.group(1)
                   for (_,_,c) in self.head_comments
-                  for m in [re.match(r"^r=(\w+)", c)] if m ])
+                  for m in [re.search(r'\b(?:r=(\w+))\b', c)] if m ])
 
     def batched(self):
         for date, user, comment in self.head_comments:
@@ -337,11 +336,11 @@ class PullReq:
 
     def disapproval_list(self):
         return [u for (d,u,c) in self.head_comments
-                if c.startswith("r-")]
+                for m in [re.search(r'\b(?:r-)', c)] if m]
 
     def count_retries(self):
-        return len([c for (d,u,c) in self.head_comments if (
-                    c.startswith("@bors: retry"))])
+        return len([c for (d,u,c) in self.head_comments
+                    for m in [re.search(r'\b(?:retry)\b', c)] if m])
 
     # annoyingly, even though we're starting from a "pull" json
     # blob, this blob does not have the "mergeable" flag; only
@@ -388,7 +387,7 @@ class PullReq:
         return len([c for c in self.statuses if c == "failure"])
 
     def count_successes(self):
-        return len([c for c in self.statuses if c == "success"])
+        return 1 if self.statuses and self.statuses[0] == 'success' else 0
 
     def count_pendings(self):
         return len([c for c in self.statuses if c == "pending"])
@@ -445,19 +444,17 @@ class PullReq:
         self.dst().git().refs().heads(self.test_ref).patch(sha=master_sha,
                                                            force=True)
 
-    def parse_merge_sha(self):
-        parsed_merge_sha = None
+    def parse_metadata(self):
+        cs = self.dst().commits(self.sha).comments().get()
+        status_comments = [
+            c['body'][len(u'status: '):].encode('utf-8')
+            for c in cs
+            if c['user']['login'].encode('utf-8') == self.user and c['body'] and c['body'].startswith(u'status: ')
+        ]
+        self.metadata = json.loads(status_comments[-1]) if status_comments else {}
 
-        for s in self.dst().statuses(self.sha).get():
-            if s['creator']['login'].encode('utf-8') == self.user and s['state'].encode('utf-8') == 'pending':
-                mat = re.match(r'running tests for.*?candidate ([a-z0-9]+)', s['description'].encode('utf-8'))
-                if mat: parsed_merge_sha = mat.group(1)
-                break
-
-        if self.merge_sha:
-            assert self.merge_sha == parsed_merge_sha
-        else:
-            self.merge_sha = parsed_merge_sha
+    def set_metadata(self, **kwargs):
+        self.add_comment(self.sha, 'status: {}'.format(json.dumps(kwargs)))
 
     def merge_pull_head_to_test_ref(self):
         s = "merging %s into %s" % (self.short(), self.test_ref)
@@ -470,14 +467,15 @@ class PullReq:
             j = self.dst().merges().post(base=self.test_ref,
                                          head=self.sha,
                                          commit_message=m)
-            self.merge_sha = j["sha"].encode("utf8")
+            merge_sha = j["sha"].encode("utf8")
             u = ("https://github.com/%s/%s/commit/%s" %
-                 (self.dst_owner, self.dst_repo, self.merge_sha))
+                 (self.dst_owner, self.dst_repo, merge_sha))
             s = "%s merged ok, testing candidate = %.8s" % (self.short(),
-                                                            self.merge_sha)
+                                                            merge_sha)
             self.log.info(s)
+            self.set_metadata(merge_sha=merge_sha)
+            self.set_pending("running tests for candidate {:.7}".format(merge_sha), u)
             self.add_comment(self.sha, s)
-            self.set_pending("running tests for candidate {}".format(self.merge_sha), u)
 
         except github.ApiError:
             s = s + " failed"
@@ -486,8 +484,10 @@ class PullReq:
             self.set_error(s)
 
     def merge_batched_pull_reqs_to_test_ref(self, pulls):
+        batched_pulls = [x for x in pulls if x.batched() and x.current_state() == STATE_APPROVED]
+
         batch_msg = 'merging {} batched pull requests into {}'.format(
-            len([x for x in pulls if x.current_state() == STATE_APPROVED]),
+            len(batched_pulls),
             self.batch_ref,
         )
         self.log.info(batch_msg)
@@ -503,28 +503,29 @@ class PullReq:
 
         successes = []
         failures = []
+        rollup_pulls = []
 
         batch_sha = ''
 
-        for pull in pulls:
-            if pull.current_state() == STATE_APPROVED:
-                self.log.info('merging {} into {}'.format(pull.short(), self.batch_ref))
+        for pull in batched_pulls:
+            self.log.info('merging {} into {}'.format(pull.short(), self.batch_ref))
 
-                msg = 'Merge pull request #{} from {}/{}\n\n{}\n\nReviewed-by: {}'.format(
-                    pull.num,
-                    pull.src_owner, pull.ref,
-                    pull.title,
-                    ', '.join(pull.approval_list())
-                )
-                pull_repr = '- {}/{} = {}: {}'.format(pull.src_owner, pull.ref, pull.sha, pull.title)
+            msg = 'Merge pull request #{} from {}/{}\n\n{}\n\nReviewed-by: {}'.format(
+                pull.num,
+                pull.src_owner, pull.ref,
+                pull.title,
+                ', '.join(pull.approval_list())
+            )
+            pull_repr = '- #{} {} ({}/{} = {})'.format(pull.num, pull.title, pull.src_owner, pull.ref, pull.sha)
 
-                try:
-                    info = self.dst().merges().post(base=self.batch_ref, head=pull.sha, commit_message=msg)
-                    batch_sha = info['sha'].encode('utf-8')
-                except github.ApiError:
-                    failures.append(pull_repr)
-                else:
-                    successes.append(pull_repr)
+            try:
+                info = self.dst().merges().post(base=self.batch_ref, head=pull.sha, commit_message=msg)
+                batch_sha = info['sha'].encode('utf-8')
+            except github.ApiError:
+                failures.append(pull_repr)
+            else:
+                successes.append(pull_repr)
+                rollup_pulls.append([pull.num, pull.sha])
 
         if batch_sha:
             try:
@@ -534,14 +535,19 @@ class PullReq:
                 self.dst().git().refs().post(sha=batch_sha, ref='refs/heads/' + self.test_ref)
 
             url = 'https://github.com/{}/{}/commit/{}'.format(self.dst_owner, self.dst_repo, batch_sha)
-            short_msg = 'running tests for rollup candidate {} ({} successes, {} failures)'.format(batch_sha, len(successes), len(failures))
-            msg = 'Testing rollup candidate = {:.8}'.format(batch_sha)
+            short_msg = 'running tests for rollup candidate {:.7} (successful merges: {} out of {})'.format(
+                batch_sha,
+                len(successes),
+                len(successes) + len(failures),
+            )
+            msg = 'Testing rollup candidate = {:.7}'.format(batch_sha)
             if successes: msg += '\n\n**Successful merges:**\n\n{}'.format('\n'.join(successes))
             if failures: msg += '\n\n**Failed merges:**\n\n{}'.format('\n'.join(failures))
 
             self.log.info(short_msg)
-            self.add_comment(self.sha, msg)
+            self.set_metadata(merge_sha=batch_sha, rollup_pulls=rollup_pulls)
             self.set_pending(short_msg, url)
+            self.add_comment(self.sha, msg)
         else:
             batch_msg += ' failed'
 
@@ -556,31 +562,44 @@ class PullReq:
         else:
             self.merge_pull_head_to_test_ref()
 
-    def advance_master_ref_to_test(self):
-        assert self.merge_sha != None
+    def advance_master_ref_to_test(self, pulls):
+        ret = False
+
+        if self.batched():
+            num2sha = {x.num: x.sha for x in pulls}
+
+            advanced = False
+            for num, sha in self.metadata['rollup_pulls']:
+                if num2sha[num] != sha:
+                    advanced = True
+
+                    msg = '#{} advanced, testing again without the PR'.format(num)
+                    self.log.info(msg)
+                    self.add_comment(self.sha, msg)
+
+            if advanced:
+                self.statuses = [x for x in self.statuses if x not in ['success', 'pending']] # Mark this PR as unsuccessful
+                self.merge_or_batch(pulls)
+                return ret
+
         s = ("fast-forwarding %s to %s = %.8s" %
-             (self.master_ref, self.test_ref, self.merge_sha))
+             (self.master_ref, self.test_ref, self.metadata['merge_sha']))
         self.log.info(s)
         try:
-            self.dst().git().refs().heads(self.master_ref).patch(sha=self.merge_sha,
+            self.dst().git().refs().heads(self.master_ref).patch(sha=self.metadata['merge_sha'],
                                                                  force=False)
             self.add_comment(self.sha, s)
+
+            ret = True
         except github.ApiError:
             s = s + " failed"
             self.log.info(s)
             self.add_comment(self.sha, s)
             self.set_error(s)
 
-        try:
-            self.dst().pulls(self.num).patch(state="closed")
-            self.closed = True
-        except github.ApiError:
-            self.log.info("closing failed; auto-closed after merge?")
-            pass
+        return ret
 
-
-
-    def try_advance(self, pulls):
+    def try_advance(self, pulls, cfg):
         s = self.current_state()
 
         self.log.info("considering %s", self.desc())
@@ -600,18 +619,10 @@ class PullReq:
             self.merge_or_batch(pulls)
 
         elif s == STATE_PENDING:
-            self.parse_merge_sha()
-            if self.merge_sha == None:
-                c = ("No active merge of candidate %.8s found, likely manual push to %s"
-                     % (self.sha, self.master_ref))
-                self.log.info(c)
-                self.add_comment(self.sha, c)
-                self.merge_or_batch(pulls)
-                return
+            self.parse_metadata()
             self.log.info("%s - found pending state, checking tests", self.short())
-            assert self.merge_sha != None
             bb = BuildBot(self.cfg)
-            (t, main_urls, extra_urls) = bb.test_status(self.merge_sha)
+            (t, main_urls, extra_urls) = bb.test_status(self.metadata['merge_sha'])
 
             if t == True:
                 self.log.info("%s - tests passed, marking success", self.short())
@@ -623,6 +634,8 @@ class PullReq:
                 c += "\n"
                 self.add_comment(self.sha, c)
                 self.set_success("all tests passed")
+
+                s = STATE_TESTED
 
             elif t == False:
                 self.log.info("%s - tests failed, marking failure", self.short())
@@ -638,11 +651,11 @@ class PullReq:
             else:
                 self.log.info("%s - no info yet, waiting on tests", self.short())
 
-        elif s == STATE_TESTED:
+        if s == STATE_TESTED:
+            self.parse_metadata()
             self.log.info("%s - tests successful, attempting landing", self.short())
-            self.parse_merge_sha()
-            self.advance_master_ref_to_test()
-
+            if self.advance_master_ref_to_test(pulls):
+                run(cfg)
 
 
 def main():
@@ -668,6 +681,9 @@ def main():
     logging.info("loading bors.cfg")
     cfg = json.load(open("bors.cfg"))
 
+    run(cfg)
+
+def run(cfg):
     gh = None
     if "gh_pass" in cfg:
         gh = github.GitHub(username=cfg["gh_user"].encode("utf8"),
@@ -694,67 +710,6 @@ def main():
 
     pulls = [ PullReq(cfg, gh, pull) for pull in
               all_pulls ]
-
-    #
-    # We are reconstructing the relationship between three tree-states on the
-    # fly here. We're doing to because there was nowhere useful to leave it
-    # written between runs, and it can be discovered by inspection.
-    #
-    # The situation is this:
-    #
-    #
-    #                 test_ref ==>  <test_sha>
-    #
-    #                               /     \
-    #                              /       \
-    #                             /         \
-    #  master_ref ==>  <master_sha>         <candidate_sha> == p.sha
-    #                            |           |
-    #                            |           |
-    #                           ...         ...
-    #
-    #
-    # When this is true, it means we're currently testing candidate_sha
-    # which (should) be the sha of a single pull req's head.
-    #
-    # We discover this situation by working backwards:
-    #
-    #   - We get the test_ref's sha, test_sha
-    #   - We get the master_ref's sha, master_sha
-    #   - We get the 2 parent links of test_sha
-    #   - We exclude the master_sha from that parent list
-    #   - Whatever the _other_ parent is, we consider the candidate
-    #
-    # If we fail to find any steps along the way, bors will either ignore
-    # the current state of affairs (i.e. assume it's _not_ presently testing
-    # any pull req) or else crash due to inability to load something.
-    # So it's non-fatal if we get it wrong; we'll only advance (make changes)
-    # if we get it right.
-    #
-
-    test_ref = cfg["test_ref"].encode("utf8")
-    master_ref = cfg["master_ref"].encode("utf8")
-    test_head = gh.repos(owner)(repo).git().refs().heads(test_ref).get()
-    master_head = gh.repos(owner)(repo).git().refs().heads(master_ref).get()
-    test_sha = test_head["object"]["sha"].encode("utf8")
-    master_sha = master_head["object"]["sha"].encode("utf8")
-    test_commit = gh.repos(owner)(repo).git().commits(test_sha).get()
-    test_parents = [ x["sha"].encode("utf8") for x in test_commit["parents"] ]
-    candidate_sha = None
-    if len(test_parents) == 2 and master_sha in test_parents:
-        test_parents.remove(master_sha)
-        candidate_sha = test_parents[0]
-        logging.info("test ref '%s' = %.8s, parents: '%s' = %.8s and candidate = %.8s",
-                     test_ref, test_sha,
-                     master_ref, master_sha,
-                     candidate_sha)
-    for p in pulls:
-        if p.sha == candidate_sha:
-            logging.info("candidate = %.8s found in pull req %s",
-                         candidate_sha, p.short())
-            p.merge_sha = test_sha
-
-
 
     # By now we have found all pull reqs and marked the one that's the
     # currently-building candidate (if it exists). We then sort them
@@ -810,7 +765,7 @@ def main():
     else:
         p = pulls[-1]
         logging.info("working with most-ripe pull %s", p.short())
-        p.try_advance(list(reversed(pulls)))
+        p.try_advance(list(reversed(pulls)), cfg)
 
 
 
