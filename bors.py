@@ -308,11 +308,11 @@ class PullReq:
 
     def approval_list(self):
         return ([u for (d,u,c) in self.head_comments
-                 if (c.startswith("r+") or
-                     c.startswith("r=me"))] +
+                 # Check if "r+" or "r=me"
+                 for m in [re.search(r'\b(?:r\+|r=me\b)', c)] if m] +
                 [ m.group(1)
                   for (_,_,c) in self.head_comments
-                  for m in [re.match(r"^r=(\w+)", c)] if m ])
+                  for m in [re.search(r'\b(?:r=(\w+))\b', c)] if m ])
 
     def batched(self):
         for date, user, comment in self.head_comments:
@@ -336,11 +336,11 @@ class PullReq:
 
     def disapproval_list(self):
         return [u for (d,u,c) in self.head_comments
-                if c.startswith("r-")]
+                for m in [re.search(r'\b(?:r-)', c)] if m]
 
     def count_retries(self):
-        return len([c for (d,u,c) in self.head_comments if (
-                    c.startswith("@bors: retry"))])
+        return len([c for (d,u,c) in self.head_comments
+                    for m in [re.search(r'\b(?:retry)\b', c)] if m])
 
     # annoyingly, even though we're starting from a "pull" json
     # blob, this blob does not have the "mergeable" flag; only
