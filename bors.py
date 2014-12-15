@@ -563,6 +563,8 @@ class PullReq:
             self.merge_pull_head_to_test_ref()
 
     def advance_master_ref_to_test(self, pulls):
+        ret = False
+
         if self.batched():
             num2sha = {x.num: x.sha for x in pulls}
 
@@ -578,7 +580,7 @@ class PullReq:
             if advanced:
                 self.statuses = [x for x in self.statuses if x not in ['success', 'pending']] # Mark this PR as unsuccessful
                 self.merge_or_batch(pulls)
-                return
+                return ret
 
         s = ("fast-forwarding %s to %s = %.8s" %
              (self.master_ref, self.test_ref, self.metadata['merge_sha']))
@@ -587,6 +589,8 @@ class PullReq:
             self.dst().git().refs().heads(self.master_ref).patch(sha=self.metadata['merge_sha'],
                                                                  force=False)
             self.add_comment(self.sha, s)
+
+            ret = True
         except github.ApiError:
             s = s + " failed"
             self.log.info(s)
@@ -600,9 +604,9 @@ class PullReq:
             self.log.info("closing failed; auto-closed after merge?")
             pass
 
+        return ret
 
-
-    def try_advance(self, pulls):
+    def try_advance(self, pulls, cfg):
         s = self.current_state()
 
         self.log.info("considering %s", self.desc())
@@ -638,6 +642,8 @@ class PullReq:
                 self.add_comment(self.sha, c)
                 self.set_success("all tests passed")
 
+                s = STATE_TESTED
+
             elif t == False:
                 self.log.info("%s - tests failed, marking failure", self.short())
                 c = "some tests failed:"
@@ -652,11 +658,11 @@ class PullReq:
             else:
                 self.log.info("%s - no info yet, waiting on tests", self.short())
 
-        elif s == STATE_TESTED:
+        if s == STATE_TESTED:
             self.parse_metadata()
             self.log.info("%s - tests successful, attempting landing", self.short())
-            self.advance_master_ref_to_test(pulls)
-
+            if self.advance_master_ref_to_test(pulls):
+                run(cfg)
 
 
 def main():
@@ -682,6 +688,9 @@ def main():
     logging.info("loading bors.cfg")
     cfg = json.load(open("bors.cfg"))
 
+    run(cfg)
+
+def run(cfg):
     gh = None
     if "gh_pass" in cfg:
         gh = github.GitHub(username=cfg["gh_user"].encode("utf8"),
@@ -763,7 +772,7 @@ def main():
     else:
         p = pulls[-1]
         logging.info("working with most-ripe pull %s", p.short())
-        p.try_advance(list(reversed(pulls)))
+        p.try_advance(list(reversed(pulls)), cfg)
 
 
 
