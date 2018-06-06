@@ -1,4 +1,4 @@
-Bors is an automated integrator for github and [buildbot](http://buildbot.rust-lang.org/).
+Bors is an automated integrator for github and [buildbot](https://buildbot.net/).
 ===========
 
  It's written for the [rust project](http://www.rust-lang.org/), so probably contains a
