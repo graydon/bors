@@ -754,7 +754,7 @@ def main():
 
     #
     # We are reconstructing the relationship between three tree-states on the
-    # fly here. We're doing to because there was nowhere useful to leave it
+    # fly here. We're doing so because there was nowhere useful to leave it
     # written between runs, and it can be discovered by inspection.
     #
     # The situation is this:
