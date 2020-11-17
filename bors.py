@@ -8,7 +8,8 @@
 # option. This file may not be copied, modified, or distributed
 # except according to those terms.
 #
-# Bors is an automated integrator for github and buildbot.
+# Bors is an automated integrator for github and buildbot
+# (and travis, github-actions, and others).
 #
 # It's written for the rust project, so probably contains a
 # number of peculiarities of this project. You may need to do
@@ -622,6 +623,30 @@ class PullReq:
                 return
             self.log.info("%s - found pending state, checking tests", self.short())
             assert self.merge_sha is not None
+            if self.cfg.get("use_github_checks_api"):
+                statuses = self.dst().commits(self.merge_sha,"check-runs").get().check_runs
+                self.log.info("USING %d commit status for commit: %s" % (len(statuses), self.merge_sha))
+                pending = [s for s in statuses if s["status"].encode("utf8") != "completed"]
+                successes = [s for s in statuses if s["status"].encode("utf8") == "completed" and s["conclusion"].encode("utf8") == "success"]
+                failures = [s for s in statuses if s["status"].encode("utf8") == "completed" and s["conclusion"].encode("utf8") == "failure"]
+                # consider any other completion code as error
+                errors = [s for s in statuses if s["status"].encode("utf8") == "completed" and not ( s["conclusion"].encode("utf8") == "failure" or s["conclusion"].encode("utf8") == "success") ]
+                self.log.info("%d pending %d sucesses %d failure %d error" % (len(pending), len(successes), len(failures), len(errors)))
+
+                if len(statuses) == 0 or (len(successes) + len(failures) + len(errors)) == 0:
+                    t = None
+                    main_urls = []
+                    extra_urls = []
+                elif len(successes) > 0 and len(statuses) == len(successes):
+                    # should it be
+                    # "len(successes) > 0 and (len(failures) + len(errors)) == 0" ?
+                    t = True
+                    main_urls = [s["html_url"].encode("utf8") for s in successes]
+                    extra_urls = []
+                else:
+                    t = False
+                    main_urls = [s["html_url"].encode("utf8") for s in failures]
+                    extra_urls = [s["html_url"].encode("utf8") for s in errors]
             if self.cfg.get("use_github_commit_status_api"):
                 statuses = self.dst().statuses(self.merge_sha).get()
                 self.log.info("found %d commit status for commit: %s" % (len(statuses), self.merge_sha))
