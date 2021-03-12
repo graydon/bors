@@ -81,7 +81,7 @@
 
 import argparse
 import json
-import urllib2
+import urllib.request, urllib.error, urllib.parse
 import re
 import logging
 import logging.handlers
@@ -127,8 +127,8 @@ class BuildBot:
     def __init__(self, cfg):
         self.log = logging.getLogger("buildbot")
         self.cfg = cfg
-        self.url = self.cfg["buildbot"].encode("utf8")
-        self.builders = [ x.encode("utf8") for x in self.cfg["builders"] ]
+        self.url = self.cfg["buildbot"]
+        self.builders = [ x for x in self.cfg["builders"] ]
         self.nbuilds = self.cfg["nbuilds"]
         self.revs = {}
         self.get_status()
@@ -150,7 +150,7 @@ class BuildBot:
              "&".join(["select=%d" % x
                        for x in range(-1, -(self.nbuilds+1), -1)]))
         self.log.info("fetching " + u)
-        j = json.load(urllib2.urlopen(u, timeout=TIMEOUT))
+        j = json.load(urllib.request.urlopen(u, timeout=TIMEOUT))
         for build in j:
             b = j[build]
             rev = None
@@ -158,7 +158,7 @@ class BuildBot:
                 continue
             for props in b["properties"]:
                 if props[0] == "got_revision" and props[2] in ("Source", "Git", "SetProperty Step"):
-                    rev = props[1].encode("utf8")
+                    rev = props[1]
             if rev is not None:
                 yield (rev, b)
 
@@ -218,26 +218,26 @@ def ustr(s):
     if s is None:
         return ""
     else:
-        return s.encode("utf8")
+        return s
 
 class PullReq:
     def __init__(self, cfg, gh, j):
         self.cfg = cfg
         self.log = logging.getLogger("pullreq")
-        self.user = cfg["gh_user"].encode("utf8")
-        self.target_ref = j["base"]["ref"].encode("utf8")
-        self.reviewers = [ r.encode("utf8") for r in cfg["reviewers"] ]
-        self.approval_tokens = [ r.encode("utf8") for r in cfg["approval_tokens"] ]
-        self.disapproval_tokens = [ r.encode("utf8") for r in cfg["disapproval_tokens"] ]
-        self.ignored_users_in_comments = [ r.encode("utf8") for r in cfg.get("ignored_users_in_comments", []) ]
+        self.user = cfg["gh_user"]
+        self.target_ref = j["base"]["ref"]
+        self.reviewers = [ r for r in cfg["reviewers"] ]
+        self.approval_tokens = [ r for r in cfg["approval_tokens"] ]
+        self.disapproval_tokens = [ r for r in cfg["disapproval_tokens"] ]
+        self.ignored_users_in_comments = [ r for r in cfg.get("ignored_users_in_comments", []) ]
         self.num=j["number"]
         self.gh_host=cfg.get("gh_host", "github.com")
-        self.dst_owner=cfg["owner"].encode("utf8")
-        self.dst_repo=cfg["repo"].encode("utf8")
-        self.src_owner=j["head"]["repo"]["owner"]["login"].encode("utf8")
-        self.src_repo=j["head"]["repo"]["name"].encode("utf8")
-        self.ref=j["head"]["ref"].encode("utf8")
-        self.sha=j["head"]["sha"].encode("utf8")
+        self.dst_owner=cfg["owner"]
+        self.dst_repo=cfg["repo"]
+        self.src_owner=j["head"]["repo"]["owner"]["login"]
+        self.src_repo=j["head"]["repo"]["name"]
+        self.ref=j["head"]["ref"]
+        self.sha=j["head"]["sha"]
 
         if cfg.get("test_ref"):
             self.test_ref = cfg["test_ref"]
@@ -247,7 +247,7 @@ class PullReq:
         self.title=ustr(j["title"])
         self.body=ustr(j["body"])
         self.merge_sha = None
-        self.closed=j["state"].encode("utf8") == "closed"
+        self.closed=j["state"] == "closed"
         self.approved = False
         self.testpass = False
         self.gh = gh
@@ -287,8 +287,8 @@ class PullReq:
         cs = (self.dst().pulls(self.num).comments().get()
               + self.dst().issues(self.num).comments().get())
         self.pull_comments = [
-            (c["created_at"].encode("utf8"),
-             c["user"]["login"].encode("utf8"),
+            (c["created_at"],
+             c["user"]["login"],
              ustr(c["body"]))
             for c in cs
             ]
@@ -297,11 +297,11 @@ class PullReq:
         logging.info("loading head comments on %s", self.short())
         cs = self.src().commits(self.sha).comments().get()
         self.head_comments = [
-            (c["created_at"].encode("utf8"),
-             c["user"]["login"].encode("utf8"),
+            (c["created_at"],
+             c["user"]["login"],
              ustr(c["body"]))
             for c in cs
-            if c["user"]["login"].encode("utf8") in self.reviewers and
+            if c["user"]["login"] in self.reviewers and
                 # don't allow edited comments because the owner of the fork can edit them
                 c["created_at"] == c["updated_at"]
             ]
@@ -309,7 +309,7 @@ class PullReq:
     def all_comments(self):
         a = self.head_comments + self.pull_comments
         a = sorted(a, key=lambda c: c[0])
-        a = filter(lambda c: c[1] not in self.ignored_users_in_comments, a)
+        a = [c for c in a if c[1] not in self.ignored_users_in_comments]
         return a
 
     def last_comment(self):
@@ -390,9 +390,9 @@ class PullReq:
     def get_head_statuses(self):
         ss = self.dst().statuses(self.sha).get()
         logging.info("loading statuses of %s", self.short())
-        self.statuses = [ s["state"].encode("utf8")
+        self.statuses = [ s["state"]
                           for s in ss
-                          if s["creator"]["login"].encode("utf8") == self.user]
+                          if s["creator"]["login"] == self.user]
 
     def set_status(self, s, **kwargs):
         self.log.info("%s - setting status: %s (%s)",
@@ -452,9 +452,9 @@ class PullReq:
         # Find the newest 'pending' status and parse the SHA out of that
         ss = self.dst().statuses(self.sha).get()
         logging.info("loading statuses of %s", self.short())
-        statusdescs = [ s["description"].encode("utf8")
+        statusdescs = [ s["description"]
                           for s in ss
-                          if s["creator"]["login"].encode("utf8") == self.user and s["state"].encode("utf8") == "pending"]
+                          if s["creator"]["login"] == self.user and s["state"] == "pending"]
         if len(statusdescs) > 0:
             # parse it
             m = re.match(r"running tests for candidate ([a-z0-9]+)", statusdescs[0])
@@ -504,7 +504,7 @@ class PullReq:
 
     def reset_test_ref_to_target(self):
         j = self.dst().git().refs().heads(self.target_ref).get()
-        target_sha = j["object"]["sha"].encode("utf8")
+        target_sha = j["object"]["sha"]
         self.log.info("resetting %s to %s = %.8s",
                       self.test_ref, self.target_ref, target_sha)
         try:
@@ -526,7 +526,7 @@ class PullReq:
             j = self.dst().merges().post(base=self.test_ref,
                                          head=self.sha,
                                          commit_message=m)
-            self.merge_sha = j["sha"].encode("utf8")
+            self.merge_sha = j["sha"]
             u = ("https://%s/%s/%s/commit/%s" %
                  (self.gh_host, self.dst_owner, self.dst_repo, self.merge_sha))
             s = "%s merged ok, testing candidate = %.8s" % (self.short(),
@@ -574,12 +574,12 @@ class PullReq:
         # parents of the merge sha are
         # the tip of the merge-target and the
         # feature branch
-        owner = self.cfg["owner"].encode("utf8")
-        repo = self.cfg["repo"].encode("utf8")
+        owner = self.cfg["owner"]
+        repo = self.cfg["repo"]
         target_head = self.gh.repos(owner)(repo).git().refs().heads(self.target_ref).get()
-        target_sha = target_head["object"]["sha"].encode("utf8")
+        target_sha = target_head["object"]["sha"]
         test_commit = self.gh.repos(owner)(repo).git().commits(self.merge_sha).get()
-        test_parents = [ x["sha"].encode("utf8") for x in test_commit["parents"] ]
+        test_parents = [ x["sha"] for x in test_commit["parents"] ]
         return (len(test_parents) == 2 and
                 target_sha in test_parents and
                 self.sha in test_parents)
@@ -607,10 +607,10 @@ class PullReq:
 
         elif s == STATE_PENDING:
             # Make sure the optional merge sha is loaded
-            owner = self.cfg["owner"].encode("utf8")
-            repo = self.cfg["repo"].encode("utf8")
+            owner = self.cfg["owner"]
+            repo = self.cfg["repo"]
             test_head = self.gh.repos(owner)(repo).git().refs().heads(self.test_ref).get()
-            test_sha = test_head["object"]["sha"].encode("utf8")
+            test_sha = test_head["object"]["sha"]
             self.merge_sha = test_sha
 
             if not self.fresh():
@@ -626,11 +626,11 @@ class PullReq:
             if self.cfg.get("use_github_checks_api"):
                 statuses = self.dst().commits(self.merge_sha,"check-runs").get().check_runs
                 self.log.info("USING %d commit status for commit: %s" % (len(statuses), self.merge_sha))
-                pending = [s for s in statuses if s["status"].encode("utf8") != "completed"]
-                successes = [s for s in statuses if s["status"].encode("utf8") == "completed" and s["conclusion"].encode("utf8") == "success"]
-                failures = [s for s in statuses if s["status"].encode("utf8") == "completed" and s["conclusion"].encode("utf8") == "failure"]
+                pending = [s for s in statuses if s["status"] != "completed"]
+                successes = [s for s in statuses if s["status"] == "completed" and s["conclusion"] == "success"]
+                failures = [s for s in statuses if s["status"] == "completed" and s["conclusion"] == "failure"]
                 # consider any other completion code as error
-                errors = [s for s in statuses if s["status"].encode("utf8") == "completed" and not ( s["conclusion"].encode("utf8") == "failure" or s["conclusion"].encode("utf8") == "success") ]
+                errors = [s for s in statuses if s["status"] == "completed" and not ( s["conclusion"] == "failure" or s["conclusion"] == "success") ]
                 self.log.info("%d pending %d sucesses %d failure %d error" % (len(pending), len(successes), len(failures), len(errors)))
 
                 if len(statuses) == 0 or (len(successes) + len(failures) + len(errors)) == 0:
@@ -641,19 +641,19 @@ class PullReq:
                     # should it be
                     # "len(successes) > 0 and (len(failures) + len(errors)) == 0" ?
                     t = True
-                    main_urls = [s["html_url"].encode("utf8") for s in successes]
+                    main_urls = [s["html_url"] for s in successes]
                     extra_urls = []
                 else:
                     t = False
-                    main_urls = [s["html_url"].encode("utf8") for s in failures]
-                    extra_urls = [s["html_url"].encode("utf8") for s in errors]
+                    main_urls = [s["html_url"] for s in failures]
+                    extra_urls = [s["html_url"] for s in errors]
             if self.cfg.get("use_github_commit_status_api"):
                 statuses = self.dst().statuses(self.merge_sha).get()
                 self.log.info("found %d commit status for commit: %s" % (len(statuses), self.merge_sha))
-                pending = [s for s in statuses if s["state"].encode("utf8") == "pending"]
-                successes = [s for s in statuses if s["state"].encode("utf8") == "success"]
-                failures = [s for s in statuses if s["state"].encode("utf8") == "failure"]
-                errors = [s for s in statuses if s["state"].encode("utf8") == "error"]
+                pending = [s for s in statuses if s["state"] == "pending"]
+                successes = [s for s in statuses if s["state"] == "success"]
+                failures = [s for s in statuses if s["state"] == "failure"]
+                errors = [s for s in statuses if s["state"] == "error"]
                 self.log.info("%d pending %d sucesses %d failure %d error" % (len(pending), len(successes), len(failures), len(errors)))
                 if len(statuses) == 0 or (len(successes) + len(failures) + len(errors)) == 0:
                     t = None
@@ -661,12 +661,12 @@ class PullReq:
                     extra_urls = []
                 elif len(successes) > 0 and (len(failures) + len(errors)) == 0:
                     t = True
-                    main_urls = [s["target_url"].encode("utf8") for s in successes]
+                    main_urls = [s["target_url"] for s in successes]
                     extra_urls = []
                 else:
                     t = False
-                    main_urls = [s["target_url"].encode("utf8") for s in failures]
-                    extra_urls = [s["target_url"].encode("utf8") for s in errors]
+                    main_urls = [s["target_url"] for s in failures]
+                    extra_urls = [s["target_url"] for s in errors]
             else:
                 bb = BuildBot(self.cfg)
                 (t, main_urls, extra_urls) = bb.test_status(self.merge_sha)
@@ -754,17 +754,17 @@ def main():
 
     gh = None
     if "gh_pass" in cfg:
-        gh = github.GitHub(username=cfg["gh_user"].encode("utf8"),
-                           password=cfg["gh_pass"].encode("utf8"),
+        gh = github.GitHub(username=cfg["gh_user"],
+                           password=cfg["gh_pass"],
                            api_url=cfg.get("gh_api"))
     else:
-        gh = github.GitHub(username=cfg["gh_user"].encode("utf8"),
-                           access_token=cfg["gh_token"].encode("utf8"),
+        gh = github.GitHub(username=cfg["gh_user"],
+                           access_token=cfg["gh_token"],
                            api_url=cfg.get("gh_api"))
 
 
-    owner = cfg["owner"].encode("utf8")
-    repo = cfg["repo"].encode("utf8")
+    owner = cfg["owner"]
+    repo = cfg["repo"]
 
     if "collaborators_as_reviewers" in cfg and cfg["collaborators_as_reviewers"] is True:
         # NOTE there is no paging when listing collaborators
@@ -886,5 +886,5 @@ if __name__ == "__main__":
     try:
         main()
     except github.ApiError as e:
-        print("Github API exception: " + str(e.response))
+        print(("Github API exception: " + str(e.response)))
         exit(-1)

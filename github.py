@@ -43,7 +43,7 @@ Traceback (most recent call last):
 ApiNotFoundError: https://api.github.com/users/github-not-exist-user/followers
 '''
 
-import re, os, sha, time, hmac, base64, hashlib, urllib, urllib2, mimetypes
+import re, os, time, hmac, base64, hashlib, urllib.request, urllib.parse, urllib.error, urllib.request, urllib.error, urllib.parse, mimetypes
 
 try:
     import json
@@ -52,7 +52,7 @@ except ImportError:
 
 from collections import Iterable
 from datetime import datetime, timedelta, tzinfo
-from StringIO import StringIO
+from io import StringIO
 TIMEOUT=60
 
 _METHOD_MAP = dict(
@@ -117,8 +117,8 @@ class GitHub(object):
             kw['redirect_uri'] = self._redirect_uri
         if state:
             kw['state'] = state
-        opener = urllib2.build_opener(urllib2.HTTPSHandler)
-        request = urllib2.Request('https://github.com/login/oauth/access_token', data=_encode_params(kw))
+        opener = urllib.request.build_opener(urllib.request.HTTPSHandler)
+        request = urllib.request.Request('https://github.com/login/oauth/access_token', data=_encode_params(kw))
         request.get_method = _METHOD_MAP['POST']
         request.add_header('Accept', 'application/json')
         try:
@@ -127,7 +127,7 @@ class GitHub(object):
             if 'error' in r:
                 raise ApiAuthError(str(r.error))
             return str(r.access_token)
-        except urllib2.HTTPError, e:
+        except urllib.error.HTTPError as e:
             raise ApiAuthError('HTTPError when get access token')
 
     def __getattr__(self, attr):
@@ -142,8 +142,8 @@ class GitHub(object):
         if method in ['POST', 'PATCH', 'PUT']:
             data = _encode_json(kw)
         url = '%s%s' % (self._URL, path)
-        opener = urllib2.build_opener(urllib2.HTTPSHandler)
-        request = urllib2.Request(url, data=data)
+        opener = urllib.request.build_opener(urllib.request.HTTPSHandler)
+        request = urllib.request.Request(url, data=data)
         request.get_method = _METHOD_MAP[method]
         if self._authorization:
             request.add_header('Authorization', self._authorization)
@@ -157,7 +157,7 @@ class GitHub(object):
                     return _parse_json(response.read())
                 if response.code == 204:
                     return None
-            except urllib2.HTTPError, e:
+            except urllib.error.HTTPError as e:
                 is_json = self._process_resp(e.headers)
                 json = None
                 if is_json:
@@ -165,11 +165,12 @@ class GitHub(object):
                 req = JsonObject(method=method, url=url)
                 resp = JsonObject(code=e.code, json=json)
                 if e.code == 404:
+                    print(url)
                     raise ApiError(url, req, resp)
                 if nretries > 0:
                     nretries -= 1
                     #print "temporary HTTP error, retrying up to %d times..." % nretries
-                    print "temporary HTTP error (%d) %s on %s with body %s, retrying up to %d times..." % (e.code, method, path, data, nretries)
+                    print("temporary HTTP error (%d) %s on %s with body %s, retrying up to %d times..." % (e.code, method, path, data, nretries))
                     continue
                 if resp.code==404:
                     raise ApiNotFoundError(url, req, resp)
@@ -239,9 +240,9 @@ def _encode_params(kw):
     Encode parameters.
     '''
     args = []
-    for k, v in kw.iteritems():
-        qv = v.encode('utf-8') if isinstance(v, unicode) else str(v)
-        args.append('%s=%s' % (k, urllib.quote(qv)))
+    for k, v in kw.items():
+        qv = v.encode('utf-8') if isinstance(v, str) else str(v)
+        args.append('%s=%s' % (k, urllib.parse.quote(qv)))
     return '&'.join(args)
 
 def _encode_json(obj):
@@ -261,7 +262,7 @@ def _encode_json(obj):
 def _parse_json(jsonstr):
     def _obj_hook(pairs):
         o = JsonObject()
-        for k, v in pairs.iteritems():
+        for k, v in pairs.items():
             o[str(k)] = v
         return o
     return json.loads(jsonstr, object_hook=_obj_hook)
