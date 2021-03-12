@@ -1,3 +1,18 @@
+NOTE (2021):
+============
+
+This project is only very moderately maintained and mostly dormant (though not
+obsolete -- it's still used daily). It was originally developed for use early in
+the Rust project's life, and has been superceded by multiple enhanced rewrites:
+
+  - Homu:  https://github.com/barosl/homu
+  - Bors-NG: https://bors.tech/ / https://github.com/bors-ng/bors-ng
+
+I will periodically accept PRs and such for minor compatibility issues or
+blockers to keep it running, but in general future feature-work or development
+of the lineage should go to one of the successor projects.
+
+
 Bors is an automated integrator for github and [buildbot](https://buildbot.net/).
 ===========
 
