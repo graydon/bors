@@ -367,8 +367,11 @@ class PullReq:
                     for m in [re.match(rec, c)] if m and u in self.reviewers and self.sha.startswith(m.group(1)) ])
 
     def count_retries(self):
-        return len([c for (d,u,c) in self.head_comments if (
-                    c.startswith("@"+self.user+": retry"))])
+        r = ( len([c for (d,u,c) in self.head_comments if (
+                     c.startswith("@"+self.user+": retry"))])
+                + len([c for (d,u,c) in self.pull_comments if (
+                     c.startswith("@"+self.user+": retry") and u in self.reviewers)]))
+        return r
 
     # annoyingly, even though we're starting from a "pull" json
     # blob, this blob does not have the "mergeable" flag; only
