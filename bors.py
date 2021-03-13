@@ -650,7 +650,7 @@ class PullReq:
                     main_urls = []
                     extra_urls = []
 
-            if self.cfg.get("use_github_commit_status_api"):
+            elif self.cfg.get("use_github_commit_status_api"):
                 statuses = self.dst().statuses(self.merge_sha).get()
                 self.log.info("found %d commit status for commit: %s" % (len(statuses), self.merge_sha))
                 pending = [s for s in statuses if s["state"] == "pending"]
