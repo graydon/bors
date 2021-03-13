@@ -633,20 +633,20 @@ class PullReq:
                 errors = [s for s in statuses if s["status"] == "completed" and not ( s["conclusion"] == "failure" or s["conclusion"] == "success") ]
                 self.log.info("%d pending %d sucesses %d failure %d error" % (len(pending), len(successes), len(failures), len(errors)))
 
-                if len(statuses) == 0 or (len(successes) + len(failures) + len(errors)) == 0:
-                    t = None
-                    main_urls = []
-                    extra_urls = []
-                elif len(successes) > 0 and len(statuses) == len(successes):
-                    # should it be
-                    # "len(successes) > 0 and (len(failures) + len(errors)) == 0" ?
+                if len(successes) > 0 and len(statuses) == len(successes):
                     t = True
                     main_urls = [s["html_url"] for s in successes]
                     extra_urls = []
-                else:
+                elif (len(errors)+len(failures)) > 0:
+                    # any error/failure -> mark as failed (no need to wait for pending)
                     t = False
                     main_urls = [s["html_url"] for s in failures]
                     extra_urls = [s["html_url"] for s in errors]
+                else:
+                    t = None
+                    main_urls = []
+                    extra_urls = []
+
             if self.cfg.get("use_github_commit_status_api"):
                 statuses = self.dst().statuses(self.merge_sha).get()
                 self.log.info("found %d commit status for commit: %s" % (len(statuses), self.merge_sha))
