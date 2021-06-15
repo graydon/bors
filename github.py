@@ -2,7 +2,9 @@
 # -*-coding: utf-8-unix -*-
 
 '''
-GitHub API Python SDK. (Python >= 2.5)
+GitHub API Python SDK. (Python >= 2.6)
+
+Apache License
 
 Michael Liao (askxuefeng@gmail.com)
 
@@ -12,27 +14,28 @@ Usage:
 >>> L = gh.users('githubpy').followers.get()
 >>> L[0].id
 470058
->>> L[0].login
-u'michaelliao'
+>>> L[0].login == u'michaelliao'
+True
 >>> x_ratelimit_remaining = gh.x_ratelimit_remaining
 >>> x_ratelimit_limit = gh.x_ratelimit_limit
+>>> x_ratelimit_reset = gh.x_ratelimit_reset
 >>> L = gh.users('githubpy').following.get()
->>> L[0]._links.self.href
-u'https://api.github.com/users/michaelliao'
+>>> L[0].url == u'https://api.github.com/users/michaelliao'
+True
 >>> L = gh.repos('githubpy')('testgithubpy').issues.get(state='closed', sort='created')
->>> L[0].title
-u'sample issue for test'
+>>> L[0].title == u'sample issue for test'
+True
 >>> L[0].number
 1
 >>> I = gh.repos('githubpy')('testgithubpy').issues(1).get()
->>> I.url
-u'https://api.github.com/repos/githubpy/testgithubpy/issues/1'
+>>> I.url == u'https://api.github.com/repos/githubpy/testgithubpy/issues/1'
+True
 >>> gh = GitHub(username='githubpy', password='test-githubpy-1234')
 >>> r = gh.repos('githubpy')('testgithubpy').issues.post(title='test create issue', body='just a test')
->>> r.title
-u'test create issue'
->>> r.state
-u'open'
+>>> r.title == u'test create issue'
+True
+>>> r.state == u'open'
+True
 >>> gh.repos.thisisabadurl.get()
 Traceback (most recent call last):
     ...
@@ -43,16 +46,25 @@ Traceback (most recent call last):
 ApiNotFoundError: https://api.github.com/users/github-not-exist-user/followers
 '''
 
-import re, os, time, hmac, base64, hashlib, urllib.request, urllib.parse, urllib.error, urllib.request, urllib.error, urllib.parse, mimetypes
+__version__ = '1.1.1'
 
 try:
-    import json
-except ImportError:
-    import simplejson as json
+    # Python 2
+    from urllib2 import build_opener, HTTPSHandler, Request, HTTPError
+    from urllib import quote as urlquote
+    from StringIO import StringIO
+    def bytes(string, encoding=None):
+        return str(string)
+except:
+    # Python 3
+    from urllib.request import build_opener, HTTPSHandler, HTTPError, Request
+    from urllib.parse import quote as urlquote
+    from io import StringIO
 
+import re, os, time, hmac, base64, hashlib, urllib, mimetypes, json
 from collections import Iterable
 from datetime import datetime, timedelta, tzinfo
-from io import StringIO
+
 TIMEOUT=60
 
 _METHOD_MAP = dict(
@@ -64,6 +76,88 @@ _METHOD_MAP = dict(
 
 DEFAULT_SCOPE = None
 RW_SCOPE = 'user,public_repo,repo,repo:status,gist'
+
+def _encode_params(kw):
+    '''
+    Encode parameters.
+    '''
+    args = []
+    for k, v in kw.items():
+        try:
+            # Python 2
+            qv = v.encode('utf-8') if isinstance(v, unicode) else str(v)
+        except:
+            qv = v
+        args.append('%s=%s' % (k, urlquote(qv)))
+    return '&'.join(args)
+
+def _encode_json(obj):
+    '''
+    Encode object as json str.
+    '''
+    def _dump_obj(obj):
+        if isinstance(obj, dict):
+            return obj
+        d = dict()
+        for k in dir(obj):
+            if not k.startswith('_'):
+                d[k] = getattr(obj, k)
+        return d
+    return json.dumps(obj, default=_dump_obj)
+
+def _parse_json(jsonstr):
+    def _obj_hook(pairs):
+        o = JsonObject()
+        for k, v in pairs.items():
+            o[str(k)] = v
+        return o
+    return json.loads(jsonstr, object_hook=_obj_hook)
+
+class _Executable(object):
+
+    def __init__(self, _gh, _method, _path):
+        self._gh = _gh
+        self._method = _method
+        self._path = _path
+
+    def __call__(self, **kw):
+        return self._gh._http(self._method, self._path, **kw)
+
+    def __str__(self):
+        return '_Executable (%s %s)' % (self._method, self._path)
+
+    __repr__ = __str__
+
+class _Callable(object):
+
+    def __init__(self, _gh, _name):
+        self._gh = _gh
+        self._name = _name
+
+    def __call__(self, *args):
+        if len(args)==0:
+            return self
+        name = '%s/%s' % (self._name, '/'.join([str(arg) for arg in args]))
+        return _Callable(self._gh, name)
+
+    def __getattr__(self, attr):
+        if attr=='get':
+            return _Executable(self._gh, 'GET', self._name)
+        if attr=='put':
+            return _Executable(self._gh, 'PUT', self._name)
+        if attr=='post':
+            return _Executable(self._gh, 'POST', self._name)
+        if attr=='patch':
+            return _Executable(self._gh, 'PATCH', self._name)
+        if attr=='delete':
+            return _Executable(self._gh, 'DELETE', self._name)
+        name = '%s/%s' % (self._name, attr)
+        return _Callable(self._gh, name)
+
+    def __str__(self):
+        return '_Callable (%s)' % self._name
+
+    __repr__ = __str__
 
 class GitHub(object):
 
@@ -78,9 +172,13 @@ class GitHub(object):
             self._URL = 'https://api.github.com'
         self.x_ratelimit_remaining = (-1)
         self.x_ratelimit_limit = (-1)
+        self.x_ratelimit_reset = (-1)
         self._authorization = None
         if username and password:
-            self._authorization = 'Basic %s' % base64.b64encode('%s:%s' % (username, password))
+            # roundabout hack for Python 3
+            userandpass = base64.b64encode(bytes('%s:%s' % (username, password), 'utf-8'))
+            userandpass = userandpass.decode('ascii')
+            self._authorization = 'Basic %s' % userandpass
         elif access_token:
             self._authorization = 'token %s' % access_token
         self._client_id = client_id
@@ -117,8 +215,8 @@ class GitHub(object):
             kw['redirect_uri'] = self._redirect_uri
         if state:
             kw['state'] = state
-        opener = urllib.request.build_opener(urllib.request.HTTPSHandler)
-        request = urllib.request.Request('https://github.com/login/oauth/access_token', data=_encode_params(kw))
+        opener = build_opener(HTTPSHandler)
+        request = Request('https://github.com/login/oauth/access_token', data=_encode_params(kw))
         request.get_method = _METHOD_MAP['POST']
         request.add_header('Accept', 'application/json')
         try:
@@ -127,53 +225,50 @@ class GitHub(object):
             if 'error' in r:
                 raise ApiAuthError(str(r.error))
             return str(r.access_token)
-        except urllib.error.HTTPError as e:
+        except HTTPError as e:
             raise ApiAuthError('HTTPError when get access token')
 
     def __getattr__(self, attr):
         return _Callable(self, '/%s' % attr)
 
-    def _http(self, method, path, **kw):
+    def _http(self, _method, _path, **kw):
         nretries = 10
         data = None
         params = None
-        if method=='GET' and kw:
-            path = '%s?%s' % (path, _encode_params(kw))
-        if method in ['POST', 'PATCH', 'PUT']:
-            data = _encode_json(kw)
-        url = '%s%s' % (self._URL, path)
-        opener = urllib.request.build_opener(urllib.request.HTTPSHandler)
-        request = urllib.request.Request(url, data=data)
-        request.get_method = _METHOD_MAP[method]
+        if _method=='GET' and kw:
+            _path = '%s?%s' % (_path, _encode_params(kw))
+        if _method in ['POST', 'PATCH', 'PUT']:
+            data = bytes(_encode_json(kw), 'utf-8')
+        url = '%s%s' % (self._URL, _path)
+        opener = build_opener(HTTPSHandler)
+        request = Request(url, data=data)
+        request.get_method = _METHOD_MAP[_method]
         if self._authorization:
             request.add_header('Authorization', self._authorization)
-        if method in ['POST', 'PATCH', 'PUT']:
+        if _method in ['POST', 'PATCH', 'PUT']:
             request.add_header('Content-Type', 'application/x-www-form-urlencoded')
         while True:
             try:
                 response = opener.open(request, timeout=TIMEOUT)
                 is_json = self._process_resp(response.headers)
                 if is_json:
-                    return _parse_json(response.read())
+                    return _parse_json(response.read().decode('utf-8'))
                 if response.code == 204:
                     return None
-            except urllib.error.HTTPError as e:
+            except HTTPError as e:
                 is_json = self._process_resp(e.headers)
-                json = None
                 if is_json:
-                    json = _parse_json(e.read())
-                req = JsonObject(method=method, url=url)
+                    json = _parse_json(e.read().decode('utf-8'))
+                else:
+                    json = e.read().decode('utf-8')
+                req = JsonObject(method=_method, url=url)
                 resp = JsonObject(code=e.code, json=json)
-                if e.code == 404:
-                    print(url)
-                    raise ApiError(url, req, resp)
-                if nretries > 0:
-                    nretries -= 1
-                    #print "temporary HTTP error, retrying up to %d times..." % nretries
-                    print("temporary HTTP error (%d) %s on %s with body %s, retrying up to %d times..." % (e.code, method, path, data, nretries))
-                    continue
                 if resp.code==404:
                     raise ApiNotFoundError(url, req, resp)
+                if nretries > 0:
+                    nretries -= 1
+                    print("temporary HTTP error (%d) %s on %s with body %s, retrying up to %d times..." % (e.code, _method, _path, data, nretries))
+                    continue
                 raise ApiError(url, req, resp)
 
     def _process_resp(self, headers):
@@ -185,89 +280,26 @@ class GitHub(object):
                     self.x_ratelimit_remaining = int(headers[k])
                 elif h=='x-ratelimit-limit':
                     self.x_ratelimit_limit = int(headers[k])
+                elif h=='x-ratelimit-reset':
+                    self.x_ratelimit_reset = int(headers[k])
                 elif h=='content-type':
                     is_json = headers[k].startswith('application/json')
         return is_json
 
-class _Executable(object):
-
-    def __init__(self, gh, method, path):
-        self._gh = gh
-        self._method = method
-        self._path = path
-
-    def __call__(self, **kw):
-        return self._gh._http(self._method, self._path, **kw)
-
-    def __str__(self):
-        return '_Executable (%s %s)' % (self._method, self._path)
-
-    __repr__ = __str__
-
-class _Callable(object):
-
-    def __init__(self, gh, name):
-        self._gh = gh
-        self._name = name
-
-    def __call__(self, *args):
-        if len(args)==0:
-            return self
-        name = '%s/%s' % (self._name, '/'.join([str(arg) for arg in args]))
-        return _Callable(self._gh, name)
-
-    def __getattr__(self, attr):
-        if attr=='get':
-            return _Executable(self._gh, 'GET', self._name)
-        if attr=='put':
-            return _Executable(self._gh, 'PUT', self._name)
-        if attr=='post':
-            return _Executable(self._gh, 'POST', self._name)
-        if attr=='patch':
-            return _Executable(self._gh, 'PATCH', self._name)
-        if attr=='delete':
-            return _Executable(self._gh, 'DELETE', self._name)
-        name = '%s/%s' % (self._name, attr)
-        return _Callable(self._gh, name)
-
-    def __str__(self):
-        return '_Callable (%s)' % self._name
-
-    __repr__ = __str__
-
-def _encode_params(kw):
+class JsonObject(dict):
     '''
-    Encode parameters.
+    general json object that can bind any fields but also act as a dict.
     '''
-    args = []
-    for k, v in kw.items():
-        qv = v.encode('utf-8') if isinstance(v, str) else str(v)
-        args.append('%s=%s' % (k, urllib.parse.quote(qv)))
-    return '&'.join(args)
+    def __getattr__(self, key):
+        try:
+            return self[key]
+        except KeyError:
+            raise AttributeError(r"'Dict' object has no attribute '%s'" % key)
 
-def _encode_json(obj):
-    '''
-    Encode object as json str.
-    '''
-    def _dump_obj(obj):
-        if isinstance(obj, dict):
-            return obj
-        d = dict()
-        for k in dir(obj):
-            if not k.startswith('_'):
-                d[k] = getattr(obj, k)
-        return d
-    return json.dumps(obj, default=_dump_obj)
+    def __setattr__(self, attr, value):
+        self[attr] = value
 
-def _parse_json(jsonstr):
-    def _obj_hook(pairs):
-        o = JsonObject()
-        for k, v in pairs.items():
-            o[str(k)] = v
-        return o
-    return json.loads(jsonstr, object_hook=_obj_hook)
-
-class ApiError(BaseException):
+class ApiError(Exception):
 
     def __init__(self, url, request, response):
         super(ApiError, self).__init__(url)
@@ -281,22 +313,6 @@ class ApiAuthError(ApiError):
 
 class ApiNotFoundError(ApiError):
     pass
-
-class JsonObject(dict):
-    '''
-    general json object that can bind any fields but also act as a dict.
-    '''
-    def __getattr__(self, attr):
-        return self[attr]
-
-    def __setattr__(self, attr, value):
-        self[attr] = value
-
-    def __getstate__(self):
-        return self.copy()
-
-    def __setstate__(self, state):
-        self.update(state)
 
 if __name__ == '__main__':
     import doctest
