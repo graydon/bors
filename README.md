@@ -6,6 +6,7 @@ obsolete -- it's still used daily). It was originally developed for use early in
 the Rust project's life, and has been superseded by multiple enhanced rewrites:
 
   - Homu:  https://github.com/barosl/homu
+  - Fork of Homu that Rust uses: https://github.com/rust-lang/homu
   - Bors-NG: https://bors.tech/ / https://github.com/bors-ng/bors-ng
 
 I will periodically accept PRs and such for minor compatibility issues or
